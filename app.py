@@ -5,23 +5,32 @@ import io
 import re
 
 st.set_page_config(page_title="OCR Indexé Intelligent", page_icon="🧠", layout="centered")
-st.title("🔗 Lecture OCR par indexation champ + valeur")
+st.title("🔗 Lecture OCR par indexation + alias")
 
-# 🎯 Champs à extraire
+# 🎯 Champs à extraire (noms canoniques)
 target_fields = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
 
-# 📉 Prétraitement de l’image
+# 🧠 Alias pour tolérer les erreurs OCR
+field_aliases = {
+    "voc": "Voc",
+    "isc": "Isc",
+    "pmax": "Pmax",
+    "vpm": "Vpm",
+    "ipm": "Ipm",
+    "lpm": "Ipm",  # alias commun OCR
+}
+
+# 📉 Prétraitement image
 def preprocess_image(img, rotation):
     if rotation:
         img = img.rotate(-rotation, expand=True)
     max_width = 1024
     if img.width > max_width:
-        ratio = max_width / img.width
-        new_height = int(img.height * ratio)
-        img = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
+        ratio = max_width / float(img.width)
+        img = img.resize((max_width, int(img.height * ratio)), Image.Resampling.LANCZOS)
     return img
 
-# 🔍 Lecture OCR brute
+# 🔍 Lecture OCR brut
 def ocr_space_api(img_bytes, api_key="helloworld"):
     response = requests.post(
         "https://api.ocr.space/parse/image",
@@ -35,45 +44,38 @@ def ocr_space_api(img_bytes, api_key="helloworld"):
     result = response.json()
     return result.get("ParsedResults", [])[0].get("ParsedText", "")
 
-# 🧠 Indexation des libellés techniques et des valeurs chiffrées
-def index_and_match_fields(text, field_keys):
+# 🧠 Indexation champs et valeurs, puis correspondance avec alias
+def index_and_match_fields_with_alias(text, field_keys, aliases):
     lines = [line.strip() for line in text.splitlines() if line.strip()]
-    field_block = []
-    value_block = []
+    raw_fields = []
+    raw_values = []
 
-    # Étape 1: indexer les libellés (ex: "Voc:")
+    # Étape 1 : indexer les libellés reconnus
     for line in lines:
-        clean = line.rstrip(":").strip()
-        if clean.lower() in [f.lower() for f in field_keys]:
-            field_block.append(clean)
+        if line.endswith(":"):
+            clean = line.rstrip(":").strip().lower()
+            if clean in aliases:
+                raw_fields.append(aliases[clean])
 
-    # Étape 2: indexer les valeurs chiffrées
+    # Étape 2 : collecter les valeurs chiffrées
     for line in lines:
         match = re.match(r"^\d+[.,]?\d*\s*[A-Za-z%ΩVWAm]*$", line)
         if match:
-            value_block.append(match.group(0).strip())
+            raw_values.append(match.group(0).strip())
 
-    # Étape 3: associer par position
-    full_pairs = {}
-    for i in range(min(len(field_block), len(value_block))):
-        full_pairs[field_block[i]] = value_block[i]
+    # Étape 3 : associer par position
+    result = {}
+    for i in range(min(len(raw_fields), len(raw_values))):
+        result[raw_fields[i]] = raw_values[i]
 
-    # Étape 4: filtrer uniquement les champs qui t’intéressent
-    filtered = {}
-    for key in field_keys:
-        for actual_key in full_pairs:
-            if actual_key.lower() == key.lower():
-                filtered[key] = full_pairs[actual_key]
-                break
-        else:
-            filtered[key] = "Non détecté"
-    return filtered
+    # Étape 4 : filtrer uniquement les champs cibles
+    final = {key: result.get(key, "Non détecté") for key in field_keys}
+    return final
 
-# 📥 Interface utilisateur
+# 📥 Interface utilisateur Streamlit
 uploaded_file = st.file_uploader("📤 Importer une image technique", type=["jpg", "jpeg", "png"])
 if uploaded_file:
     img = Image.open(uploaded_file)
-
     rotation = st.selectbox("🔁 Rotation ?", [0, 90, 180, 270], index=0)
     img = preprocess_image(img, rotation)
     st.image(img, caption="🖼️ Image traitée", use_container_width=True)
@@ -83,11 +85,13 @@ if uploaded_file:
     img.save(img_bytes, format="JPEG", quality=70)
     img_bytes.seek(0)
 
+    # OCR brut
     raw_text = ocr_space_api(img_bytes)
     with st.expander("📄 Texte OCR brut"):
         st.text(raw_text)
 
-    results = index_and_match_fields(raw_text, target_fields)
+    # Extraction finale par indexation + alias
+    results = index_and_match_fields_with_alias(raw_text, target_fields, field_aliases)
 
     st.subheader("📊 Champs techniques extraits :")
     for key in target_fields:
