@@ -20,7 +20,17 @@ def ocr_space_api(img_bytes, api_key="helloworld"):
         }
     )
     result = response.json()
-    return result["ParsedResults"][0]["ParsedText"]
+
+    # Affiche le JSON brut pour debug (optionnel)
+    # st.write(result)
+
+    if result.get("IsErroredOnProcessing"):
+        return "⚠️ Erreur API : " + result.get("ErrorMessage", ["Erreur inconnue"])[0]
+
+    try:
+        return result["ParsedResults"][0]["ParsedText"]
+    except (KeyError, IndexError):
+        return "⚠️ Résultat introuvable dans la réponse de l'API."
 
 def extract_fields(text):
     def get(rx): m = re.search(rx, text, re.IGNORECASE); return m.group(1) if m else "Non détecté"
@@ -37,12 +47,12 @@ if uploaded_file:
     img = Image.open(uploaded_file)
     st.image(img, caption="Image importée", use_column_width=True)
 
-    # Convert image to bytes
     img_bytes = io.BytesIO()
     img.save(img_bytes, format="PNG")
     img_bytes.seek(0)
 
     text = ocr_space_api(img_bytes)
+
     with st.expander("📄 Texte OCR brut"):
         st.text(text)
 
