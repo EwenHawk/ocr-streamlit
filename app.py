@@ -6,28 +6,45 @@ import io
 st.set_page_config(page_title="OCR Technique", page_icon="🔍", layout="centered")
 st.title("📸 Analyseur OCR Technique")
 
-# 🔗 Détection de bloc de champs suivi de valeurs
-def extract_ordered_pairs(text, field_keys):
+# 🧠 Correspondance des noms OCRisés avec les vrais noms de champs
+field_map = {
+    "irr meas": "Irr Meas",
+    "irr corr": "Irr Corr",
+    "voc": "Voc",
+    "isc": "Isc",
+    "pmax": "Pmax",
+    "vpm": "Vpm",
+    "ipm": "Ipm",
+    "lpm": "Ipm",       # variante OCR fréquente
+    "eff,c": "Eff,c",
+    "eff,m": "Eff,m",
+    "rsh": "Rsh"
+}
+
+# 🔗 Fonction qui aligne les champs et les valeurs
+def extract_ordered_pairs(text, field_map):
     lines = [line.strip() for line in text.splitlines() if line.strip()]
-    result = {}
-    label_indices = []
+    detected_fields = []
 
-    # Trouve les lignes contenant les champs attendus
-    for i, line in enumerate(lines):
-        label = line.lower().rstrip(":")
-        if label in [f.lower() for f in field_keys]:
-            label_indices.append((i, line.strip()))
+    # Collecte les lignes correspondant aux clés de field_map
+    for line in lines:
+        key = line.lower().rstrip(":")
+        if key in field_map:
+            detected_fields.append(field_map[key])
 
-    # S’il y a assez de valeurs après les libellés
-    if label_indices and len(lines) >= label_indices[-1][0] + len(label_indices) + 1:
-        start_val = label_indices[-1][0] + 1
-        values = lines[start_val : start_val + len(label_indices)]
-        for idx, (i, label) in enumerate(label_indices):
-            result[label.rstrip(":")] = values[idx].strip()
+    # Recherche bloc de valeurs après le dernier champ détecté
+    if detected_fields:
+        last_label_index = next(i for i, line in enumerate(lines) if line.lower().startswith(list(field_map.keys())[-1]))
+        values = lines[last_label_index + 1 : last_label_index + 1 + len(detected_fields)]
+
+        result = {}
+        for i in range(len(detected_fields)):
+            label = detected_fields[i]
+            value = values[i].strip() if i < len(values) else "Non détecté"
+            result[label] = value
+        return result
     else:
-        result = {"Erreur": "Bloc de champs ou valeurs incomplet"}
-
-    return result
+        return {"Erreur": "Aucun champ reconnu."}
 
 # 🔌 Appel OCR.space
 def ocr_space_api(img_bytes, api_key="helloworld"):
@@ -53,7 +70,7 @@ def ocr_space_api(img_bytes, api_key="helloworld"):
     except (KeyError, IndexError):
         return "⚠️ Résultat OCR introuvable."
 
-# 📥 Chargement de l’image
+# 📥 Interface utilisateur
 uploaded_file = st.file_uploader("Importer une image (JPG ou PNG)", type=["jpg", "jpeg", "png"])
 if uploaded_file:
     img = Image.open(uploaded_file)
@@ -80,12 +97,10 @@ if uploaded_file:
     with st.expander("📄 Texte OCR brut"):
         st.text(raw_text)
 
-    # 🧠 Extraction par structure ordonnée
-    field_keys = ["Irr Meas", "Irr Corr", "Voc", "Isc", "Pmax", "Vpm", "Ipm", "Eff,c", "Eff,m", "Rsh"]
-    extracted = extract_ordered_pairs(raw_text, field_keys)
+    # 📊 Extraction intelligente par correspondance
+    results = extract_ordered_pairs(raw_text, field_map)
 
-    # 📊 Affichage des résultats
     st.subheader("📊 Valeurs extraites :")
-    for k in field_keys:
-        val = extracted.get(k, "Non détecté")
+    for k in field_map.values():
+        val = results.get(k, "Non détecté")
         st.write(f"🔹 **{k}** : {val}")
