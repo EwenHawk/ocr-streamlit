@@ -7,7 +7,25 @@ import re
 st.set_page_config(page_title="OCR Technique", page_icon="🔍", layout="centered")
 st.title("📸 Analyseur OCR Technique")
 
-uploaded_file = st.file_uploader("Importer une image (JPG, PNG)", type=["jpg", "jpeg", "png"])
+# 🔧 Correction des lignes décalées (libellé sur une ligne, valeur sur la suivante)
+def fix_text_alignment(text):
+    lines = text.splitlines()
+    fixed_lines = []
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        if re.match(r"^(Voc|Isc|Pmax|Vpm|Ipm)\s*[:=]?\s*$", line, re.IGNORECASE):
+            if i + 1 < len(lines):
+                next_line = lines[i + 1].strip()
+                fixed_lines.append(f"{line} {next_line}")
+                i += 2
+            else:
+                fixed_lines.append(line)
+                i += 1
+        else:
+            fixed_lines.append(line)
+            i += 1
+    return "\n".join(fixed_lines)
 
 # 🔌 Appel sécurisé à l'API OCR.space
 def ocr_space_api(img_bytes, api_key="helloworld"):
@@ -35,7 +53,7 @@ def ocr_space_api(img_bytes, api_key="helloworld"):
 
 # 🔍 Extraction technique avec Regex
 def extract_fields(text):
-    def get(rx): 
+    def get(rx):
         m = re.search(rx, text, re.IGNORECASE)
         return m.group(1) if m else "Non détecté"
     convert = lambda v: round(float(v.replace(",", ".")), 2) if v not in ["", "Non détecté"] else v
@@ -47,38 +65,41 @@ def extract_fields(text):
         "Isc":  convert(get(r"Isc\s*[:=]?\s*(\d+[.,]?\d*)")),
     }
 
-# 📸 Traitement de l'image importée
+# 📥 Chargement et traitement de l'image
+uploaded_file = st.file_uploader("Importer une image (JPG, PNG)", type=["jpg", "jpeg", "png"])
+
 if uploaded_file:
     img = Image.open(uploaded_file)
 
-    # 📐 Sélection de l’orientation
+    # 🔁 Option de rotation
     rotation = st.selectbox("Rotation de l’image (en degrés)", [0, 90, 180, 270], index=0)
     if rotation != 0:
         img = img.rotate(-rotation, expand=True)
 
-    # 📉 Redimensionner si trop large
+    # 📉 Redimensionnement si trop large
     max_width = 1024
     if img.width > max_width:
         ratio = max_width / float(img.width)
         new_height = int(float(img.height) * ratio)
         img = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
 
-    st.image(img, caption="Image redressée et compressée", use_container_width=True)
+    st.image(img, caption="Image traitée", use_container_width=True)
 
-    # 🔄 Compression en JPEG (qualité réduite)
+    # 💾 Compression JPEG
     img_bytes = io.BytesIO()
     img.save(img_bytes, format="JPEG", quality=70)
     img_bytes.seek(0)
 
-    # 🔌 Appel OCR
-    text = ocr_space_api(img_bytes)
-
-    # 📄 Texte OCR brut
+    # 🔍 OCR
+    raw_text = ocr_space_api(img_bytes)
     with st.expander("📄 Texte OCR brut"):
-        st.text(text)
+        st.text(raw_text)
 
-    # 📊 Résultats extraits
+    # 🧠 Correction des décalages
+    fixed_text = fix_text_alignment(raw_text)
+
+    # 📊 Extraction des valeurs
     st.subheader("📊 Champs techniques extraits")
-    results = extract_fields(text)
+    results = extract_fields(fixed_text)
     for k, v in results.items():
         st.write(f"✅ **{k}** : {v}")
