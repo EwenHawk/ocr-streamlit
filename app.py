@@ -1,25 +1,28 @@
-import pytesseract
-from PIL import Image
+import streamlit as st
 import requests
 import re
-from io import BytesIO
 
-# 📌 Champs à extraire
+# 📌 Clés des champs à extraire
 TARGET_FIELDS = ["pmax", "voc", "isc", "vpm", "imp"]
 
-# 🧹 Nettoyage du texte
+# 🧹 Nettoyage du texte OCR
 def clean(text):
     return re.sub(r"\s+", " ", text.strip().lower())
 
-# 🔍 Fonction principale
-def extract_fields_from_url(image_url):
-    response = requests.get(image_url)
-    img = Image.open(BytesIO(response.content))
+# 🔍 Fonction d’extraction OCR via OCR.Space API
+def extract_fields_from_image(image_bytes, api_key="helloworld"):
+    url = "https://api.ocr.space/parse/image"
+    response = requests.post(
+        url,
+        files={"filename": image_bytes},
+        data={"apikey": api_key, "language": "eng", "isOverlayRequired": False},
+    )
 
-    raw_text = pytesseract.image_to_string(img, lang='eng')
+    result = response.json()
+    text = result.get("ParsedResults", [{}])[0].get("ParsedText", "")
     results = {}
 
-    for line in raw_text.split('\n'):
+    for line in text.split("\n"):
         line_clean = clean(line)
         for field in TARGET_FIELDS:
             match = re.search(rf"{field}\s*:\s*([\w\.\-]+)", line_clean, re.IGNORECASE)
@@ -28,8 +31,15 @@ def extract_fields_from_url(image_url):
 
     return results
 
-# 🧪 Exemple d’utilisation
-if __name__ == "__main__":
-    image_url = "https://raw.githubusercontent.com/EwenHawk/ocr-streamlit/main/.devcontainer/1000079278.jpg"
-    specs = extract_fields_from_url(image_url)
-    print("🔧 Champs détectés :", specs)
+# 🖼️ Interface Streamlit
+st.title("🔎 OCR Technique – PV Specs Extractor")
+st.write("Upload une image avec des spécifications (Voc, Isc, etc.) et récupère les données automatiquement 📥")
+
+uploaded_file = st.file_uploader("🖼️ Choisis ton image :", type=["jpg", "png", "jpeg"])
+
+if uploaded_file:
+    with st.spinner("Lecture OCR en cours..."):
+        specs = extract_fields_from_image(uploaded_file)
+
+    st.success("✅ Extraction terminée !")
+    st.json(specs)
