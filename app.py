@@ -6,18 +6,30 @@ import io
 st.set_page_config(page_title="OCR Technique", page_icon="🔍", layout="centered")
 st.title("📸 Analyseur OCR Technique")
 
-# 🔗 Associe les champs aux lignes suivantes (positionnelle)
-def pair_fields_by_following_line(text, field_keys):
+# 🔗 Détection de bloc de champs suivi de valeurs
+def extract_ordered_pairs(text, field_keys):
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     result = {}
-    for i in range(len(lines) - 1):
-        label = lines[i].split(":")[0].strip()
-        if label.lower() in [f.lower() for f in field_keys]:
-            value = lines[i + 1].strip()
-            result[label] = value
+    label_indices = []
+
+    # Trouve les lignes contenant les champs attendus
+    for i, line in enumerate(lines):
+        label = line.lower().rstrip(":")
+        if label in [f.lower() for f in field_keys]:
+            label_indices.append((i, line.strip()))
+
+    # S’il y a assez de valeurs après les libellés
+    if label_indices and len(lines) >= label_indices[-1][0] + len(label_indices) + 1:
+        start_val = label_indices[-1][0] + 1
+        values = lines[start_val : start_val + len(label_indices)]
+        for idx, (i, label) in enumerate(label_indices):
+            result[label.rstrip(":")] = values[idx].strip()
+    else:
+        result = {"Erreur": "Bloc de champs ou valeurs incomplet"}
+
     return result
 
-# 🔌 Appel à l'API OCR.space
+# 🔌 Appel OCR.space
 def ocr_space_api(img_bytes, api_key="helloworld"):
     try:
         response = requests.post(
@@ -31,7 +43,7 @@ def ocr_space_api(img_bytes, api_key="helloworld"):
         )
         result = response.json()
     except ValueError:
-        return "⚠️ Erreur : Réponse non JSON."
+        return "⚠️ Erreur : réponse non JSON."
     if not isinstance(result, dict):
         return f"⚠️ Réponse inattendue : {result}"
     if result.get("IsErroredOnProcessing"):
@@ -41,40 +53,39 @@ def ocr_space_api(img_bytes, api_key="helloworld"):
     except (KeyError, IndexError):
         return "⚠️ Résultat OCR introuvable."
 
-# 📥 Chargement de l'image
-uploaded_file = st.file_uploader("Importer une image (JPG, PNG)", type=["jpg", "jpeg", "png"])
+# 📥 Chargement de l’image
+uploaded_file = st.file_uploader("Importer une image (JPG ou PNG)", type=["jpg", "jpeg", "png"])
 if uploaded_file:
     img = Image.open(uploaded_file)
 
-    # 🔁 Rotation (sélection utilisateur)
-    rotation = st.selectbox("Rotation de l’image (en degrés)", [0, 90, 180, 270], index=0)
-    if rotation != 0:
+    # 🔁 Rotation
+    rotation = st.selectbox("Rotation de l’image", [0, 90, 180, 270], index=0)
+    if rotation:
         img = img.rotate(-rotation, expand=True)
 
-    # 📉 Redimensionnement si trop large
+    # 📉 Compression pour respecter la limite de 1 Mo
     max_width = 1024
     if img.width > max_width:
-        ratio = max_width / float(img.width)
-        new_height = int(float(img.height) * ratio)
-        img = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
+        ratio = max_width / img.width
+        img = img.resize((max_width, int(img.height * ratio)), Image.Resampling.LANCZOS)
 
-    st.image(img, caption="Image redressée", use_container_width=True)
+    st.image(img, caption="Image préparée", use_container_width=True)
 
-    # 💾 Compression JPEG pour respecter la limite de 1 Mo
     img_bytes = io.BytesIO()
     img.save(img_bytes, format="JPEG", quality=70)
     img_bytes.seek(0)
 
-    # 🔍 OCR via API
+    # 🔍 Lecture OCR
     raw_text = ocr_space_api(img_bytes)
     with st.expander("📄 Texte OCR brut"):
         st.text(raw_text)
 
-    # 📊 Extraction des champs techniques par ligne suivante
-    field_keys = ["Pmax", "Vpm", "Ipm", "Voc", "Isc"]
-    results = pair_fields_by_following_line(raw_text, field_keys)
+    # 🧠 Extraction par structure ordonnée
+    field_keys = ["Irr Meas", "Irr Corr", "Voc", "Isc", "Pmax", "Vpm", "Ipm", "Eff,c", "Eff,m", "Rsh"]
+    extracted = extract_ordered_pairs(raw_text, field_keys)
 
-    st.subheader("📊 Valeurs extraites par position :")
+    # 📊 Affichage des résultats
+    st.subheader("📊 Valeurs extraites :")
     for k in field_keys:
-        val = results.get(k, "Non détecté")
+        val = extracted.get(k, "Non détecté")
         st.write(f"🔹 **{k}** : {val}")
