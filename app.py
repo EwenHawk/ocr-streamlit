@@ -1,98 +1,37 @@
-import streamlit as st
-import requests
+import pytesseract
 from PIL import Image
-import io
 import re
 
-st.set_page_config(page_title="OCR Indexé Intelligent", page_icon="🧠", layout="centered")
-st.title("🔗 Lecture OCR par indexation + alias")
+# 📌 Liste des champs à rechercher (insensible à la casse)
+TARGET_FIELDS = ["pmax", "voc", "isc", "vpm", "imp"]
 
-# 🎯 Champs à extraire (noms canoniques)
-target_fields = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
+# 🧹 Fonction de nettoyage du texte
+def clean(text):
+    return re.sub(r"\s+", " ", text.strip().lower())
 
-# 🧠 Alias pour tolérer les erreurs OCR
-field_aliases = {
-    "voc": "Voc",
-    "isc": "Isc",
-    "pmax": "Pmax",
-    "vpm": "Vpm",
-    "ipm": "Ipm",
-    "lpm": "Ipm",  # alias commun OCR
-}
+# 🧠 Fonction principale
+def extract_spec_fields(image_path):
+    # Chargement de l'image
+    img = Image.open(image_path)
 
-# 📉 Prétraitement image
-def preprocess_image(img, rotation):
-    if rotation:
-        img = img.rotate(-rotation, expand=True)
-    max_width = 1024
-    if img.width > max_width:
-        ratio = max_width / float(img.width)
-        img = img.resize((max_width, int(img.height * ratio)), Image.Resampling.LANCZOS)
-    return img
+    # OCR avec Tesseract
+    raw_text = pytesseract.image_to_string(img, lang='eng')
 
-# 🔍 Lecture OCR brut
-def ocr_space_api(img_bytes, api_key="helloworld"):
-    response = requests.post(
-        "https://api.ocr.space/parse/image",
-        files={"filename": ("image.jpg", img_bytes, "image/jpeg")},
-        data={
-            "apikey": api_key,
-            "language": "eng",
-            "isOverlayRequired": False
-        }
-    )
-    result = response.json()
-    return result.get("ParsedResults", [])[0].get("ParsedText", "")
+    results = {}
 
-# 🧠 Indexation champs et valeurs, puis correspondance avec alias
-def index_and_match_fields_with_alias(text, field_keys, aliases):
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
-    raw_fields = []
-    raw_values = []
+    # Balayage ligne par ligne
+    for line in raw_text.split('\n'):
+        line_clean = clean(line)
+        for field in TARGET_FIELDS:
+            # Regex: cherche "champ : valeur"
+            match = re.search(rf"{field}\s*:\s*([\w\.\-]+)", line_clean, re.IGNORECASE)
+            if match:
+                results[field.upper()] = match.group(1)
 
-    # Étape 1 : indexer les libellés reconnus
-    for line in lines:
-        if line.endswith(":"):
-            clean = line.rstrip(":").strip().lower()
-            if clean in aliases:
-                raw_fields.append(aliases[clean])
+    return results
 
-    # Étape 2 : collecter les valeurs chiffrées
-    for line in lines:
-        match = re.match(r"^\d+[.,]?\d*\s*[A-Za-z%ΩVWAm]*$", line)
-        if match:
-            raw_values.append(match.group(0).strip())
-
-    # Étape 3 : associer par position
-    result = {}
-    for i in range(min(len(raw_fields), len(raw_values))):
-        result[raw_fields[i]] = raw_values[i]
-
-    # Étape 4 : filtrer uniquement les champs cibles
-    final = {key: result.get(key, "Non détecté") for key in field_keys}
-    return final
-
-# 📥 Interface utilisateur Streamlit
-uploaded_file = st.file_uploader("📤 Importer une image technique", type=["jpg", "jpeg", "png"])
-if uploaded_file:
-    img = Image.open(uploaded_file)
-    rotation = st.selectbox("🔁 Rotation ?", [0, 90, 180, 270], index=0)
-    img = preprocess_image(img, rotation)
-    st.image(img, caption="🖼️ Image traitée", use_container_width=True)
-
-    # Compression JPEG
-    img_bytes = io.BytesIO()
-    img.save(img_bytes, format="JPEG", quality=70)
-    img_bytes.seek(0)
-
-    # OCR brut
-    raw_text = ocr_space_api(img_bytes)
-    with st.expander("📄 Texte OCR brut"):
-        st.text(raw_text)
-
-    # Extraction finale par indexation + alias
-    results = index_and_match_fields_with_alias(raw_text, target_fields, field_aliases)
-
-    st.subheader("📊 Champs techniques extraits :")
-    for key in target_fields:
-        st.write(f"🔹 **{key}** → {results.get(key)}")
+# 🔍 Exemple d’utilisation
+if __name__ == "__main__":
+    image_file = "path/to/your/image.jpg"  # Remplace avec ton chemin local
+    specs = extract_spec_fields(image_file)
+    print("🔧 Champs détectés :", specs)
