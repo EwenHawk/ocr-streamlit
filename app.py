@@ -14,7 +14,7 @@ def ocr_space_api(img_bytes, api_key="helloworld"):
     try:
         response = requests.post(
             "https://api.ocr.space/parse/image",
-            files={"filename": ("image.png", img_bytes, "image/png")},
+            files={"filename": ("image.jpg", img_bytes, "image/jpeg")},
             data={
                 "apikey": api_key,
                 "language": "eng",
@@ -56,11 +56,18 @@ if uploaded_file:
     if rotation != 0:
         img = img.rotate(-rotation, expand=True)
 
-    st.image(img, caption="Image redressée", use_container_width=True)
+    # 📉 Redimensionner si trop large
+    max_width = 1024
+    if img.width > max_width:
+        ratio = max_width / float(img.width)
+        new_height = int(float(img.height) * ratio)
+        img = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
 
-    # 🔄 Conversion en PNG bytes
+    st.image(img, caption="Image redressée et compressée", use_container_width=True)
+
+    # 🔄 Compression en JPEG (qualité réduite)
     img_bytes = io.BytesIO()
-    img.save(img_bytes, format="PNG")
+    img.save(img_bytes, format="JPEG", quality=70)
     img_bytes.seek(0)
 
     # 🔌 Appel OCR
