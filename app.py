@@ -4,8 +4,8 @@ from PIL import Image
 import io
 import re
 
-st.set_page_config(page_title="OCR Indexation", page_icon="🔎", layout="centered")
-st.title("🧠 Lecture OCR par indexation ciblée")
+st.set_page_config(page_title="OCR Indexé Intelligent", page_icon="🧠", layout="centered")
+st.title("🔗 Lecture OCR par indexation champ + valeur")
 
 # 🎯 Champs à extraire
 target_fields = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
@@ -17,7 +17,8 @@ def preprocess_image(img, rotation):
     max_width = 1024
     if img.width > max_width:
         ratio = max_width / img.width
-        img = img.resize((max_width, int(img.height * ratio)), Image.Resampling.LANCZOS)
+        new_height = int(img.height * ratio)
+        img = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
     return img
 
 # 🔍 Lecture OCR brute
@@ -34,34 +35,38 @@ def ocr_space_api(img_bytes, api_key="helloworld"):
     result = response.json()
     return result.get("ParsedResults", [])[0].get("ParsedText", "")
 
-# 🧠 Indexation champ → valeur par ordre
-def extract_indexed_values(text, field_keys):
+# 🧠 Indexation des libellés techniques et des valeurs chiffrées
+def index_and_match_fields(text, field_keys):
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     field_block = []
     value_block = []
 
-    # Étape 1: détecter les champs techniques (ex: "Voc:")
+    # Étape 1: indexer les libellés (ex: "Voc:")
     for line in lines:
-        if line.endswith(":") and re.sub(r"[^a-zA-Z]", "", line).lower() in [f.lower() for f in field_keys]:
-            field_block.append(line.rstrip(":").strip())
+        clean = line.rstrip(":").strip()
+        if clean.lower() in [f.lower() for f in field_keys]:
+            field_block.append(clean)
 
-    # Étape 2: collecter les valeurs numériques après le bloc
-    if field_block:
-        start_index = lines.index(field_block[0] + ":") + 1
-        for line in lines[start_index:]:
-            match = re.search(r"\d+[.,]?\d*\s*[A-Za-z%ΩVWAm]*", line)
-            if match:
-                value_block.append(match.group(0).strip())
-            if len(value_block) >= len(field_block):
-                break
+    # Étape 2: indexer les valeurs chiffrées
+    for line in lines:
+        match = re.match(r"^\d+[.,]?\d*\s*[A-Za-z%ΩVWAm]*$", line)
+        if match:
+            value_block.append(match.group(0).strip())
 
     # Étape 3: associer par position
-    result = {}
+    full_pairs = {}
     for i in range(min(len(field_block), len(value_block))):
-        result[field_block[i]] = value_block[i]
+        full_pairs[field_block[i]] = value_block[i]
 
-    # Filtrer les champs cibles
-    filtered = {key: result.get(key, "Non détecté") for key in field_keys}
+    # Étape 4: filtrer uniquement les champs qui t’intéressent
+    filtered = {}
+    for key in field_keys:
+        for actual_key in full_pairs:
+            if actual_key.lower() == key.lower():
+                filtered[key] = full_pairs[actual_key]
+                break
+        else:
+            filtered[key] = "Non détecté"
     return filtered
 
 # 📥 Interface utilisateur
@@ -71,7 +76,7 @@ if uploaded_file:
 
     rotation = st.selectbox("🔁 Rotation ?", [0, 90, 180, 270], index=0)
     img = preprocess_image(img, rotation)
-    st.image(img, caption="🖼️ Image préparée", use_container_width=True)
+    st.image(img, caption="🖼️ Image traitée", use_container_width=True)
 
     # Compression JPEG
     img_bytes = io.BytesIO()
@@ -82,8 +87,8 @@ if uploaded_file:
     with st.expander("📄 Texte OCR brut"):
         st.text(raw_text)
 
-    results = extract_indexed_values(raw_text, target_fields)
+    results = index_and_match_fields(raw_text, target_fields)
 
     st.subheader("📊 Champs techniques extraits :")
     for key in target_fields:
-        st.write(f"🔹 **{key}** → {results[key]}")
+        st.write(f"🔹 **{key}** → {results.get(key)}")
