@@ -1,3 +1,6 @@
 streamlit
 pillow
 requests
+fastapi
+uvicorn
+pytesseract
