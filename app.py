@@ -6,19 +6,18 @@ import io
 st.set_page_config(page_title="OCR Technique", page_icon="🔍", layout="centered")
 st.title("📸 Analyseur OCR Technique")
 
-# 🔗 Associe les libellés et valeurs par ordre d’apparition
-def pair_fields_by_order(text, field_keys):
+# 🔗 Associe les champs aux lignes suivantes (positionnelle)
+def pair_fields_by_following_line(text, field_keys):
     lines = [line.strip() for line in text.splitlines() if line.strip()]
-    labels = [line for line in lines if any(field.lower() in line.lower() for field in field_keys)]
-    values = [line for line in lines if not any(field.lower() in line.lower() for field in field_keys)]
     result = {}
-    for i in range(min(len(labels), len(values))):
-        label = labels[i].split(":")[0].strip()
-        value = values[i].strip()
-        result[label] = value
+    for i in range(len(lines) - 1):
+        label = lines[i].split(":")[0].strip()
+        if label.lower() in [f.lower() for f in field_keys]:
+            value = lines[i + 1].strip()
+            result[label] = value
     return result
 
-# 🔌 Appel sécurisé à OCR.space
+# 🔌 Appel à l'API OCR.space
 def ocr_space_api(img_bytes, api_key="helloworld"):
     try:
         response = requests.post(
@@ -32,7 +31,7 @@ def ocr_space_api(img_bytes, api_key="helloworld"):
         )
         result = response.json()
     except ValueError:
-        return "⚠️ Erreur : réponse non JSON."
+        return "⚠️ Erreur : Réponse non JSON."
     if not isinstance(result, dict):
         return f"⚠️ Réponse inattendue : {result}"
     if result.get("IsErroredOnProcessing"):
@@ -42,7 +41,7 @@ def ocr_space_api(img_bytes, api_key="helloworld"):
     except (KeyError, IndexError):
         return "⚠️ Résultat OCR introuvable."
 
-# 📥 Interface utilisateur
+# 📥 Chargement de l'image
 uploaded_file = st.file_uploader("Importer une image (JPG, PNG)", type=["jpg", "jpeg", "png"])
 if uploaded_file:
     img = Image.open(uploaded_file)
@@ -52,7 +51,7 @@ if uploaded_file:
     if rotation != 0:
         img = img.rotate(-rotation, expand=True)
 
-    # 📉 Redimensionnement si image trop large
+    # 📉 Redimensionnement si trop large
     max_width = 1024
     if img.width > max_width:
         ratio = max_width / float(img.width)
@@ -61,21 +60,21 @@ if uploaded_file:
 
     st.image(img, caption="Image redressée", use_container_width=True)
 
-    # 💾 Compression JPEG pour réduire la taille
+    # 💾 Compression JPEG pour respecter la limite de 1 Mo
     img_bytes = io.BytesIO()
     img.save(img_bytes, format="JPEG", quality=70)
     img_bytes.seek(0)
 
-    # 🔍 Lecture OCR
+    # 🔍 OCR via API
     raw_text = ocr_space_api(img_bytes)
     with st.expander("📄 Texte OCR brut"):
         st.text(raw_text)
 
-    # 📊 Extraction par ordre
+    # 📊 Extraction des champs techniques par ligne suivante
     field_keys = ["Pmax", "Vpm", "Ipm", "Voc", "Isc"]
-    results = pair_fields_by_order(raw_text, field_keys)
+    results = pair_fields_by_following_line(raw_text, field_keys)
 
-    st.subheader("📊 Valeurs extraites par alignement :")
+    st.subheader("📊 Valeurs extraites par position :")
     for k in field_keys:
         val = results.get(k, "Non détecté")
         st.write(f"🔹 **{k}** : {val}")
