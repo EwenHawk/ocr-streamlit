@@ -7,7 +7,7 @@ import re
 st.set_page_config(page_title="OCR Technique", page_icon="🔍", layout="centered")
 st.title("📸 Analyseur OCR Technique")
 
-# 🔧 Correction des lignes décalées
+# 🔧 Corrige les libellés suivis de valeurs sur une ligne différente
 def fix_text_alignment(text):
     lines = text.splitlines()
     fixed_lines = []
@@ -27,7 +27,7 @@ def fix_text_alignment(text):
             i += 1
     return "\n".join(fixed_lines)
 
-# 🔗 Fusion des libellés et valeurs par ordre
+# 🔗 Associe les libellés et valeurs par position si séparés
 def pair_fields_by_order(text, field_keys):
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     labels = [line for line in lines if any(field.lower() in line.lower() for field in field_keys)]
@@ -39,7 +39,7 @@ def pair_fields_by_order(text, field_keys):
         result[label] = value
     return result
 
-# 🔌 Appel à l’API OCR.space
+# 🔌 Appel sécurisé à OCR.space
 def ocr_space_api(img_bytes, api_key="helloworld"):
     try:
         response = requests.post(
@@ -55,7 +55,10 @@ def ocr_space_api(img_bytes, api_key="helloworld"):
     except ValueError:
         return "⚠️ Erreur : Réponse non JSON reçue."
 
-    if isinstance(result, dict) and result.get("IsErroredOnProcessing"):
+    if not isinstance(result, dict):
+        return f"⚠️ Réponse inattendue : {result}"
+
+    if result.get("IsErroredOnProcessing"):
         return "⚠️ Erreur API : " + result.get("ErrorMessage", ["Erreur inconnue"])[0]
 
     try:
@@ -63,9 +66,9 @@ def ocr_space_api(img_bytes, api_key="helloworld"):
     except (KeyError, IndexError):
         return "⚠️ Résultat OCR introuvable."
 
-# 📥 Extraction classique avec Regex
+# 🔍 Extraction technique avec Regex
 def extract_fields(text):
-    def get(rx): 
+    def get(rx):
         m = re.search(rx, text, re.IGNORECASE)
         return m.group(1) if m else "Non détecté"
     convert = lambda v: round(float(v.replace(",", ".")), 2) if v not in ["", "Non détecté"] else v
@@ -77,7 +80,7 @@ def extract_fields(text):
         "Isc":  convert(get(r"Isc\s*[:=]?\s*(\d+[.,]?\d*)")),
     }
 
-# 📸 Interface Streamlit
+# 📥 Interface utilisateur
 uploaded_file = st.file_uploader("Importer une image (JPG, PNG)", type=["jpg", "jpeg", "png"])
 if uploaded_file:
     img = Image.open(uploaded_file)
@@ -87,7 +90,7 @@ if uploaded_file:
     if rotation != 0:
         img = img.rotate(-rotation, expand=True)
 
-    # 📉 Redimensionnement
+    # 📉 Redimensionnement si image trop large
     max_width = 1024
     if img.width > max_width:
         ratio = max_width / float(img.width)
@@ -96,29 +99,31 @@ if uploaded_file:
 
     st.image(img, caption="Image traitée", use_container_width=True)
 
-    # 💾 Compression JPEG
+    # 💾 Compression JPEG avec qualité réduite
     img_bytes = io.BytesIO()
     img.save(img_bytes, format="JPEG", quality=70)
     img_bytes.seek(0)
 
-    # 🔍 OCR
+    # 🔍 OCR via API
     raw_text = ocr_space_api(img_bytes)
     with st.expander("📄 Texte OCR brut"):
         st.text(raw_text)
 
-    # 🧠 Prétraitement du texte
+    # 🧠 Reconstruction du texte
     fixed_text = fix_text_alignment(raw_text)
 
-    # 📊 Extraction des valeurs (fusion par position)
+    # 📊 Extraction des valeurs par position
     field_keys = ["Pmax", "Vpm", "Ipm", "Voc", "Isc"]
     paired = pair_fields_by_order(fixed_text, field_keys)
+
+    # 📊 Extraction par regex
     regexed = extract_fields(fixed_text)
 
-    st.subheader("📊 Champs techniques extraits (fusion par position)")
+    st.subheader("🔗 Extraction par position (alignement)")
     for k in field_keys:
         val = paired.get(k.capitalize(), "Non détecté")
         st.write(f"🔹 **{k}** : {val}")
 
-    st.subheader("📊 Champs techniques extraits (regex)")
+    st.subheader("✅ Extraction par regex")
     for k, v in regexed.items():
         st.write(f"✅ **{k}** : {v}")
