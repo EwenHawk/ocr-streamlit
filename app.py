@@ -167,26 +167,26 @@ if img:
             w, h = rect["width"], rect["height"]
             cropped_img = img.crop((x, y, x + w, y + h))
             
-           from PIL import ImageEnhance
+        from PIL import ImageEnhance
 
-            # 1. Convertir en niveaux de gris
-            gray = cropped_img.convert("L")
-            
-            # 2. Éclaircir plus fort pour atténuer le quadrillage
-            bright = ImageEnhance.Brightness(gray).enhance(1.5)
-            
-            # 3. Forcer les gris très clairs à devenir blancs
-            forced_white = bright.point(lambda p: 255 if p > 200 else p)
-            
-            # 4. Renforcer légèrement le contraste pour garder le texte
-            final = ImageEnhance.Contrast(forced_white).enhance(1.2)
-            
-            # 5. Recomposer sur fond blanc
-            cleaned = Image.new("RGB", final.size, (255, 255, 255))
-            cleaned.paste(final.convert("RGB"))
-            
-            # 🔄 Remplace l'image croppée par la version nettoyée
-            cropped_img = cleaned
+        # 1. Convertir en niveaux de gris
+        gray = cropped_img.convert("L")
+        
+        # 2. Éclaircir plus fort pour atténuer le quadrillage
+        bright = ImageEnhance.Brightness(gray).enhance(1.5)
+        
+        # 3. Forcer les gris très clairs à devenir blancs
+        forced_white = bright.point(lambda p: 255 if p > 200 else p)
+        
+        # 4. Renforcer légèrement le contraste pour garder le texte
+        final = ImageEnhance.Contrast(forced_white).enhance(1.2)
+        
+        # 5. Recomposer sur fond blanc
+        cleaned = Image.new("RGB", final.size, (255, 255, 255))
+        cleaned.paste(final.convert("RGB"))
+        
+        # 🔄 Remplace l'image croppée par la version nettoyée
+        cropped_img = cleaned
 
             st.image(cropped_img, caption="📌 Zone sélectionnée", use_container_width=False)
 
