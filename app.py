@@ -9,11 +9,15 @@ from streamlit_drawable_canvas import st_canvas
 
 TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
 
+# États Streamlit
 if "selection_mode" not in st.session_state:
     st.session_state.selection_mode = False
 if "sheet_saved" not in st.session_state:
     st.session_state.sheet_saved = False
+if "show_save_button" not in st.session_state:
+    st.session_state.show_save_button = False
 
+# 🔍 Extraction OCR nettoyée et robuste
 def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
     aliases = {
         "voc": "Voc", "v_oc": "Voc",
@@ -47,6 +51,7 @@ def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
 
     return {key: result.get(key, "Non détecté") for key in expected_keys}
 
+# 🧠 Appel à l’API OCR.Space
 def ocr_space_api(img_bytes, api_key="helloworld"):
     try:
         response = requests.post(
@@ -58,17 +63,16 @@ def ocr_space_api(img_bytes, api_key="helloworld"):
     except Exception as e:
         return {"error": str(e)}
 
-def send_to_sheet(row_data, sheet_url, worksheet_name):
-    scope = [
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive"
-    ]
+# 💾 Envoi vers Google Sheet (API Sheets uniquement)
+def send_to_sheet(row_data, sheet_id, worksheet_name):
+    scope = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = Credentials.from_service_account_info(st.secrets["gspread_auth"], scopes=scope)
     client = gspread.authorize(creds)
-    sheet = client.open_by_url(sheet_url).worksheet(worksheet_name)
+    sheet = client.open_by_key(sheet_id).worksheet(worksheet_name)
     sheet.append_row(row_data)
     return True
 
+# ⚙️ Streamlit UI
 st.set_page_config(page_title="OCR ToolJet", page_icon="📤", layout="centered")
 st.title("🔍 OCR technique avec extraction intelligente")
 
@@ -145,18 +149,23 @@ if uploaded_file:
                     else:
                         st.success("✅ Tous les champs détectés avec succès.")
 
-                    if st.button("✅ Enregistrer les données dans Google Sheet"):
-                        try:
-                            sheet_url = "https://docs.google.com/spreadsheets/d/1yhIVYOqibFnhKKCnbhw8v0f4n1MbfY_4uZhSotK44gc/edit"  # 👈 remplace TON_ID
-                            worksheet_name = "Tests_Panneaux"
-                            row = [results[key] for key in TARGET_KEYS]
-                            send_to_sheet(row, sheet_url, worksheet_name)
-                            st.session_state.sheet_saved = True
-                        except Exception as e:
-                            st.error(f"❌ Erreur lors de l'enregistrement : {e}")
-
+                    # Active le bouton d'enregistrement
+                    st.session_state.show_save_button = True
                 else:
                     st.warning("⚠️ Aucun texte détecté dans cette zone OCR.")
+                    st.session_state.show_save_button = False
 
-            if st.session_state.sheet_saved:
-                st.success("📡 Données bien enregistrées dans Google Sheet.")
+        # ✅ Bouton persistant d'enregistrement
+        if st.session_state.show_save_button:
+            if st.button("✅ Enregistrer les données dans Google Sheet"):
+                try:
+                    sheet_id = "1yhIVYOqibFnhKKCnbhw8v0f4n1MbfY_4uZhSotK44gc"
+                    worksheet_name = "Tests_Panneaux"
+                    row = [results[key] for key in TARGET_KEYS]
+                    send_to_sheet(row, sheet_id, worksheet_name)
+                    st.session_state.sheet_saved = True
+                except Exception as e:
+                    st.error(f"❌ Erreur lors de l'enregistrement : {e}")
+
+        if st.session_state.sheet_saved:
+            st.success("📡 Données bien enregistrées dans Google Sheet.")
