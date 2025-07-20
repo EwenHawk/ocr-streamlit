@@ -7,18 +7,18 @@ from streamlit_drawable_canvas import st_canvas
 import gspread
 from google.oauth2.service_account import Credentials
 
-# 📄 Configuration
+# ⚙️ Configuration
 st.set_page_config(page_title="OCR ToolJet", page_icon="📤", layout="centered")
 st.title("📤 OCR technique + validation ToolJet")
 
-# Champs à extraire
+# Champs techniques à extraire
 target_fields = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
 field_aliases = {
     "voc": "Voc", "isc": "Isc", "pmax": "Pmax",
     "vpm": "Vpm", "ipm": "Ipm", "lpm": "Ipm"
 }
 
-# 🔎 OCR via OCR.Space (renvoie toujours dict)
+# 🔎 Appel API OCR.Space
 def ocr_space_api(img_bytes, api_key="helloworld"):
     try:
         response = requests.post(
@@ -30,7 +30,7 @@ def ocr_space_api(img_bytes, api_key="helloworld"):
     except Exception as e:
         return {"error": str(e)}
 
-# 🧠 Extraction champs OCR
+# 📊 Extraction et mappage des champs
 def index_and_match_fields_with_alias(text, field_keys, aliases):
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     raw_fields, raw_values = [], []
@@ -46,7 +46,7 @@ def index_and_match_fields_with_alias(text, field_keys, aliases):
     result = {raw_fields[i]: raw_values[i] for i in range(min(len(raw_fields), len(raw_values)))}
     return {key: result.get(key, "Non détecté") for key in field_keys}
 
-# 📤 Connexion Google Sheets via st.secrets
+# 🔐 Connexion Google Sheets via st.secrets
 def connect_to_tooljet_sheet_from_secrets(sheet_url, worksheet_title):
     scope = [
         "https://www.googleapis.com/auth/spreadsheets",
@@ -56,16 +56,23 @@ def connect_to_tooljet_sheet_from_secrets(sheet_url, worksheet_title):
     client = gspread.authorize(creds)
     return client.open_by_url(sheet_url).worksheet(worksheet_title)
 
-# 📸 Import image
+# 📥 Interface
 uploaded_file = st.file_uploader("📸 Importer une image technique", type=["jpg", "jpeg", "png"])
 if uploaded_file:
     img = Image.open(uploaded_file)
     rotation = st.selectbox("🔁 Rotation", [0, 90, 180, 270], index=0)
     img = img.rotate(-rotation, expand=True)
-    st.image(img, caption="🖼️ Aperçu brut", use_container_width=False)
 
-    # 📍 Clic pour afficher la zone de sélection
-    if st.button("🎯 Je sélectionne la zone à analyser"):
+    # 🖼️ Compression d'affichage
+    max_display_width = 800
+    if img.width > max_display_width:
+        ratio = max_display_width / img.width
+        img = img.resize((max_display_width, int(img.height * ratio)), Image.Resampling.LANCZOS)
+
+    st.image(img, caption="🖼️ Aperçu de l'image", use_container_width=False)
+
+    # 🎯 Sélection déclenchée par bouton
+    if st.button("🎯 Je sélectionne une zone à analyser"):
         canvas_width, canvas_height = img.size
         initial_rect = {
             "objects": [{
@@ -95,14 +102,12 @@ if uploaded_file:
             x, y = rect["left"], rect["top"]
             w, h = rect["width"], rect["height"]
 
-            # Limite taille max pour éviter saturation
             if w * h > 3_000_000:
-                st.warning("📛 Zone trop grande, réduis-la pour optimiser l’analyse.")
+                st.warning("📛 Zone trop grande, réduis-la pour éviter surcharge du serveur.")
             else:
                 cropped_img = img.crop((x, y, x + w, y + h))
                 st.image(cropped_img, caption="📌 Zone sélectionnée", use_container_width=False)
 
-                # OCR
                 img_bytes = io.BytesIO()
                 cropped_img.save(img_bytes, format="JPEG", quality=70)
                 img_bytes.seek(0)
@@ -112,14 +117,16 @@ if uploaded_file:
                     st.error(f"❌ Erreur OCR : {ocr_result['error']}")
                 else:
                     raw_text = ocr_result.get("ParsedResults", [{}])[0].get("ParsedText", "")
-                    st.expander("📄 Texte OCR brut").text(raw_text[:3000])
+                    max_chars = 3000
+                    preview = raw_text[:max_chars] + "..." if len(raw_text) > max_chars else raw_text
+                    with st.expander("📄 Aperçu du texte OCR brut (tronqué)"):
+                        st.text(preview)
 
                     results = index_and_match_fields_with_alias(raw_text, target_fields, field_aliases)
                     st.subheader("📊 Champs extraits :")
                     for key in target_fields:
                         st.write(f"🔹 **{key}** → {results.get(key)}")
 
-                    # ✅ Envoi vers Google Sheet
                     if st.button("✅ Je valide les données"):
                         try:
                             sheet_url = "https://docs.google.com/spreadsheets/d/1yhIVYOqibFnhKKCnbhw8v0f4n1MbfY_4uZhSotK44gc/edit"
