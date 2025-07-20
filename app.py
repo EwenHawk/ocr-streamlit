@@ -170,7 +170,7 @@ if img:
 
             if st.button("📤 Lancer le traitement OCR"):
                 img_bytes = io.BytesIO()
-                cropped_img.save(img_bytes, format="JPEG", quality=70)
+                cropped_img.save(img_bytes, format="JPEG", quality=100)
                 img_bytes.seek(0)
 
                 ocr_result = ocr_space_api(img_bytes)
