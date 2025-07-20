@@ -7,7 +7,7 @@ from streamlit_drawable_canvas import st_canvas
 
 # 🧭 Configuration de la page
 st.set_page_config(page_title="OCR Intelligent", page_icon="🔎", layout="centered")
-st.title("🧠 OCR indexé + rectangle interactif")
+st.title("🧠 OCR indexé + zone sélectionnable")
 
 # 🎯 Champs techniques à extraire
 target_fields = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
@@ -27,7 +27,7 @@ def preprocess_image(img, rotation):
     return img
 
 # 🔍 Appel API OCR.Space
-def ocr_space_api(img_bytes, api_key="helloworld"):
+def ocr_space_api(img_bytes, api_key="helloworld"):  # ← remplace par ta vraie clé API
     try:
         response = requests.post(
             "https://api.ocr.space/parse/image",
@@ -39,7 +39,7 @@ def ocr_space_api(img_bytes, api_key="helloworld"):
     except Exception as e:
         return f"[Erreur OCR] {e}"
 
-# 🧠 Indexation du texte OCR avec alias
+# 🧠 Extraction des champs techniques
 def index_and_match_fields_with_alias(text, field_keys, aliases):
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     raw_fields, raw_values = [], []
@@ -55,60 +55,50 @@ def index_and_match_fields_with_alias(text, field_keys, aliases):
     result = {raw_fields[i]: raw_values[i] for i in range(min(len(raw_fields), len(raw_values)))}
     return {key: result.get(key, "Non détecté") for key in field_keys}
 
-# 📥 Chargement de l'image
+# 📥 Upload image
 uploaded_file = st.file_uploader("📤 Importer une image technique", type=["jpg", "jpeg", "png"])
 if uploaded_file:
     img = Image.open(uploaded_file)
     rotation = st.selectbox("🔁 Rotation ?", [0, 90, 180, 270], index=0)
     img = preprocess_image(img, rotation)
-    st.image(img, caption="🖼️ Image traitée", use_container_width=True)
+    st.image(img, caption="🖼️ Image affichée", use_container_width=True)
 
-    st.markdown("### 🔲 Sélectionne la zone d’analyse")
+    st.markdown("### ✏️ Dessine un rectangle pour sélectionner la zone d’analyse")
 
-    # 🧩 Rectangle initial interactif
-    initial_rect = [{
-        "type": "rect",
-        "left": img.width // 4,
-        "top": img.height // 4,
-        "width": img.width // 2,
-        "height": img.height // 3,
-        "fill": "rgba(255,165,0,0.3)",
-        "stroke": "orange",
-        "strokeWidth": 2
-    }]
-
-    # 🖋️ Canvas Streamlit interactif
+    # 🎨 Canvas avec dessin de rectangle libre
     canvas_result = st_canvas(
         background_image=img,
-        initial_drawing=initial_rect,
-        drawing_mode="transform",
+        drawing_mode="rect",
+        stroke_width=2,
+        stroke_color="orange",
+        fill_color="rgba(255,165,0,0.3)",
         update_streamlit=True,
         height=img.height,
         width=img.width,
         key="canvas"
     )
 
-    # ✂️ Rogner selon la zone sélectionnée
+    # ✂️ Analyse si rectangle dessiné
     if canvas_result.json_data and canvas_result.json_data["objects"]:
         rect = canvas_result.json_data["objects"][0]
         x, y = rect["left"], rect["top"]
         w, h = rect["width"], rect["height"]
         cropped_img = img.crop((x, y, x + w, y + h))
-        st.image(cropped_img, caption="📌 Zone sélectionnée", use_container_width=True)
+        st.image(cropped_img, caption="📌 Zone rognée", use_container_width=True)
 
-        # 🔍 OCR
+        # 📤 OCR brut
         img_bytes = io.BytesIO()
         cropped_img.save(img_bytes, format="JPEG", quality=70)
         img_bytes.seek(0)
-        raw_text = ocr_space_api(img_bytes)
 
+        raw_text = ocr_space_api(img_bytes)
         with st.expander("📄 Texte OCR brut"):
             st.text(raw_text)
 
-        # 📊 Résultats indexés
+        # 🧠 Résultats indexés
         results = index_and_match_fields_with_alias(raw_text, target_fields, field_aliases)
-        st.subheader("📊 Valeurs extraites :")
+        st.subheader("📊 Champs techniques extraits :")
         for key in target_fields:
             st.write(f"🔹 **{key}** → {results.get(key)}")
     else:
-        st.info("🖱️ Déplace et ajuste le rectangle pour analyser une zone.")
+        st.info("🖱️ Dessine un rectangle sur l’image pour lancer l’analyse.")
