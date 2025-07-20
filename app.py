@@ -151,10 +151,11 @@ if img:
             w, h = rect["width"], rect["height"]
             cropped_img = img.crop((x, y, x + w, y + h))
 
-            # 🎨 Filtrage esthétique
-            cropped_img = ImageOps.autocontrast(cropped_img, cutoff=3)
-            cropped_img = ImageEnhance.Brightness(cropped_img).enhance(1.1)
-            cropped_img = ImageEnhance.Sharpness(cropped_img).enhance(1.5)
+            # ✅ Appliquer filtre seulement si image assez grande
+            if cropped_img.width > 300 and cropped_img.height > 300:
+                cropped_img = ImageEnhance.Sharpness(cropped_img).enhance(1.2)
+                cropped_img = ImageEnhance.Contrast(cropped_img).enhance(1.05)
+                cropped_img = ImageEnhance.Brightness(cropped_img).enhance(1.05)
             bordered_img = ImageOps.expand(cropped_img, border=4, fill='gray')
 
             st.image(bordered_img, caption="🎯 Zone sélectionnée - optimisée", use_container_width=False)
