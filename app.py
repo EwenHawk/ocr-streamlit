@@ -1,15 +1,28 @@
 import streamlit as st
+import requests
 from PIL import Image
-from streamlit_drawable_canvas import st_canvas
 import io
+from streamlit_drawable_canvas import st_canvas
 
 # 📌 Initialisation de l'état de sélection
 if "selection_mode" not in st.session_state:
     st.session_state.selection_mode = False
 
-# ⚙️ Configuration de la page
+# 🔧 Configuration de la page
 st.set_page_config(page_title="OCR ToolJet", page_icon="📤", layout="centered")
-st.title("🎯 Sélection de zone OCR")
+st.title("🎯 Sélection et OCR de zone technique")
+
+# 🧠 Fonction OCR.Space
+def ocr_space_api(img_bytes, api_key="helloworld"):
+    try:
+        response = requests.post(
+            "https://api.ocr.space/parse/image",
+            files={"filename": ("image.jpg", img_bytes, "image/jpeg")},
+            data={"apikey": api_key, "language": "eng", "isOverlayRequired": False}
+        )
+        return response.json()
+    except Exception as e:
+        return {"error": str(e)}
 
 # 📥 Upload image
 uploaded_file = st.file_uploader("📸 Importer une image", type=["jpg", "jpeg", "png"])
@@ -24,9 +37,9 @@ if uploaded_file:
         ratio = max_width / img.width
         img = img.resize((max_width, int(img.height * ratio)), Image.Resampling.LANCZOS)
 
-    st.image(img, caption="🖼️ Aperçu de l'image", use_container_width=False)
+    st.image(img, caption="🖼️ Aperçu", use_container_width=False)
 
-    # 🎯 Bouton pour déclencher la sélection
+    # 🎯 Bouton pour activer la sélection
     if not st.session_state.selection_mode:
         if st.button("🎯 Je sélectionne une zone à analyser"):
             st.session_state.selection_mode = True
@@ -57,16 +70,24 @@ if uploaded_file:
             key="canvas"
         )
 
-        # 📌 Découpe et affichage de la zone sélectionnée
+        # ✂️ Extraction de la zone et OCR
         if canvas_result.json_data and canvas_result.json_data["objects"]:
             rect = canvas_result.json_data["objects"][0]
             x, y = rect["left"], rect["top"]
             w, h = rect["width"], rect["height"]
-
             cropped_img = img.crop((x, y, x + w, y + h))
             st.image(cropped_img, caption="📌 Zone sélectionnée", use_container_width=False)
 
-            # 📤 Bouton de traitement
             if st.button("📤 Lancer le traitement OCR sur cette zone"):
-                st.success("✨ Traitement lancé sur la zone sélectionnée.")
-                # Ici tu peux appeler ta fonction OCR, extraire le texte, etc.
+                img_bytes = io.BytesIO()
+                cropped_img.save(img_bytes, format="JPEG", quality=70)
+                img_bytes.seek(0)
+                ocr_result = ocr_space_api(img_bytes)
+
+                if "error" in ocr_result:
+                    st.error(f"❌ Erreur OCR : {ocr_result['error']}")
+                else:
+                    raw_text = ocr_result.get("ParsedResults", [{}])[0].get("ParsedText", "")
+                    preview = raw_text[:3000] + "..." if len(raw_text) > 3000 else raw_text
+                    st.subheader("📄 Texte OCR extrait")
+                    st.code(preview, language="text")
