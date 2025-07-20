@@ -196,9 +196,9 @@ if img:
                     st.warning("⚠️ Aucun texte détecté dans cette zone OCR.")
                     st.session_state.results = {}
 
-# 📎 Enregistrement Google Sheet
+# ✅ Le bouton d'enregistrement s’affiche seulement après OCR
 if st.session_state.results:
-    if st.button.button("✅ Enregistrer les données dans Google Sheet"):
+    if st.button("✅ Enregistrer les données dans Google Sheet"):
         try:
             sheet_id = "1yhIVYOqibFnhKKCnbhw8v0f4n1MbfY_4uZhSotK44gc"
             worksheet_name = "Tests_Panneaux"
