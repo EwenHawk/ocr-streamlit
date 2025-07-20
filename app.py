@@ -7,7 +7,7 @@ import io
 if "selection_mode" not in st.session_state:
     st.session_state.selection_mode = False
 
-# 🛠️ Configuration de la page
+# ⚙️ Configuration de la page
 st.set_page_config(page_title="OCR ToolJet", page_icon="📤", layout="centered")
 st.title("🎯 Sélection de zone OCR")
 
@@ -34,7 +34,6 @@ if uploaded_file:
     # 🟧 Zone de sélection active
     if st.session_state.selection_mode:
         canvas_width, canvas_height = img.size
-
         initial_rect = {
             "objects": [{
                 "type": "rect",
@@ -66,3 +65,8 @@ if uploaded_file:
 
             cropped_img = img.crop((x, y, x + w, y + h))
             st.image(cropped_img, caption="📌 Zone sélectionnée", use_container_width=False)
+
+            # 📤 Bouton de traitement
+            if st.button("📤 Lancer le traitement OCR sur cette zone"):
+                st.success("✨ Traitement lancé sur la zone sélectionnée.")
+                # Ici tu peux appeler ta fonction OCR, extraire le texte, etc.
