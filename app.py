@@ -5,14 +5,13 @@ import io
 import re
 from streamlit_drawable_canvas import st_canvas
 
-# 🔑 Champs techniques à extraire
 TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
 
-# 📌 Initialisation de l'état de sélection
+# 📌 Initialisation de l'état
 if "selection_mode" not in st.session_state:
     st.session_state.selection_mode = False
 
-# 🧠 Extraction robuste des champs
+# 🔍 Extraction OCR robuste et arrondie
 def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
     aliases = {
         "voc": "Voc", "v_oc": "Voc",
@@ -27,9 +26,9 @@ def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
 
     for line in lines:
         if line.endswith(":"):
-            raw_key = line.rstrip(":").strip()
-            if raw_key in aliases:
-                keys_found.append(aliases[raw_key])
+            key = line.rstrip(":").strip()
+            if key in aliases:
+                keys_found.append(aliases[key])
         else:
             match = re.match(r"^\d+[.,]?\d*\s*[a-z%ΩVWAm]*$", line, re.IGNORECASE)
             if match:
@@ -37,18 +36,16 @@ def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
 
     result = {}
     for i in range(min(len(keys_found), len(values_found))):
-        raw_value = values_found[i]
-        clean_value = re.sub(r"[^\d.,\-]", "", raw_value)
-        clean_value = clean_value.replace(",", ".")
+        raw = values_found[i]
+        clean = re.sub(r"[^\d.,\-]", "", raw).replace(",", ".")
         try:
-            num = round(float(clean_value), 1)
-            result[keys_found[i]] = str(num)
+            result[keys_found[i]] = str(round(float(clean), 1))
         except:
-            result[keys_found[i]] = raw_value
+            result[keys_found[i]] = raw
 
     return {key: result.get(key, "Non détecté") for key in expected_keys}
 
-# 🔎 API OCR.Space
+# 🧠 Appel à l’API OCR.Space
 def ocr_space_api(img_bytes, api_key="helloworld"):
     try:
         response = requests.post(
@@ -60,39 +57,39 @@ def ocr_space_api(img_bytes, api_key="helloworld"):
     except Exception as e:
         return {"error": str(e)}
 
-# ⚙️ Configuration Streamlit
+# ⚙️ Interface utilisateur
 st.set_page_config(page_title="OCR ToolJet", page_icon="📤", layout="centered")
-st.title("🔍 OCR + extraction robuste")
+st.title("🔍 OCR technique avec extraction intelligente")
 
-# 📥 Import image
-uploaded_file = st.file_uploader("📸 Importer une image technique", type=["jpg", "jpeg", "png"])
+uploaded_file = st.file_uploader("📸 Importer une image", type=["jpg", "jpeg", "png"])
 if uploaded_file:
     img = Image.open(uploaded_file)
     rotation = st.selectbox("🔁 Rotation", [0, 90, 180, 270], index=0)
     img = img.rotate(-rotation, expand=True)
 
+    # Compression si image trop large
     max_width = 800
     if img.width > max_width:
         ratio = max_width / img.width
         img = img.resize((max_width, int(img.height * ratio)), Image.Resampling.LANCZOS)
 
-    st.image(img, caption="🖼️ Aperçu de l'image", use_container_width=False)
+    st.image(img, caption="🖼️ Aperçu", use_container_width=False)
 
-    # 🎯 Bouton de sélection
+    # 🎯 Bouton déclencheur
     if not st.session_state.selection_mode:
         if st.button("🎯 Je sélectionne une zone à analyser"):
             st.session_state.selection_mode = True
 
     # 🟧 Canvas interactif
     if st.session_state.selection_mode:
-        canvas_width, canvas_height = img.size
+        w, h = img.size
         initial_rect = {
             "objects": [{
                 "type": "rect",
-                "left": canvas_width // 4,
-                "top": canvas_height // 4,
-                "width": canvas_width // 2,
-                "height": canvas_height // 3,
+                "left": w // 4,
+                "top": h // 4,
+                "width": w // 2,
+                "height": h // 5,  # ➜ Hauteur plus fine
                 "fill": "rgba(255,165,0,0.3)",
                 "stroke": "orange",
                 "strokeWidth": 2
@@ -104,21 +101,21 @@ if uploaded_file:
             initial_drawing=initial_rect,
             drawing_mode="transform",
             update_streamlit=True,
-            height=canvas_height,
-            width=canvas_width,
+            height=h,
+            width=w,
             key="canvas"
         )
 
-        # ✂️ Découpe + traitement OCR
+        # ✂️ Traitement de la sélection
         if canvas_result.json_data and canvas_result.json_data["objects"]:
             rect = canvas_result.json_data["objects"][0]
             x, y = rect["left"], rect["top"]
-            w, h = rect["width"], rect["height"]
+            w_rect, h_rect = rect["width"], rect["height"]
 
-            reduced_h = h // 2  # 🔻 réduction hauteur
-            cropped_img = img.crop((x, y, x + w, y + reduced_h))
-            st.image(cropped_img, caption="📌 Zone sélectionnée réduite", use_container_width=False)
+            cropped_img = img.crop((x, y, x + w_rect, y + h_rect))
+            st.image(cropped_img, caption="📌 Zone sélectionnée", use_container_width=False)
 
+            # 📤 Lancement OCR
             if st.button("📤 Lancer le traitement OCR"):
                 img_bytes = io.BytesIO()
                 cropped_img.save(img_bytes, format="JPEG", quality=70)
@@ -133,7 +130,7 @@ if uploaded_file:
                     st.code(raw_text[:3000], language="text")
 
                     results = extract_ordered_fields(raw_text)
-                    st.subheader("📊 Champs extraits et filtrés :")
+                    st.subheader("📊 Champs extraits et arrondis :")
                     for key, value in results.items():
                         st.write(f"🔹 **{key}** → {value}")
 
@@ -141,4 +138,4 @@ if uploaded_file:
                     if missing:
                         st.warning(f"⚠️ Champs non détectés : {', '.join(missing)}")
                     else:
-                        st.success("✅ Tous les champs ont été correctement détectés et nettoyés.")
+                        st.success("✅ Tous les champs détectés avec succès.")
