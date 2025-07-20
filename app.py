@@ -135,8 +135,8 @@ if img:
         else:
             rect_left = canvas_width // 4
             rect_top = canvas_height // 4
-            rect_width = canvas_width // 1.5
-            rect_height = canvas_height // 5
+            rect_width = canvas_width // 1
+            rect_height = canvas_height // 3
 
         initial_rect = {
             "objects": [{
