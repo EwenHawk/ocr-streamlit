@@ -3,21 +3,20 @@ import requests
 from PIL import Image
 import io
 import re
-import base64
 from streamlit_drawable_canvas import st_canvas
 
-# 🎯 Champs techniques cibles
+# 🎯 Champs techniques à extraire
 target_fields = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
 field_aliases = {
     "voc": "Voc", "isc": "Isc", "pmax": "Pmax",
     "vpm": "Vpm", "ipm": "Ipm", "lpm": "Ipm"
 }
 
-# 📐 Page layout
+# ⚙️ Config page Streamlit
 st.set_page_config(page_title="OCR intelligent", page_icon="🔎", layout="centered")
-st.title("🧠 OCR indexé + rectangle interactif")
+st.title("🧠 OCR Indexé + Zone interactive")
 
-# 🔄 Rotation + redimension image
+# 🧼 Prétraitement de l’image
 def preprocess_image(img, rotation):
     if rotation:
         img = img.rotate(-rotation, expand=True)
@@ -27,15 +26,8 @@ def preprocess_image(img, rotation):
         img = img.resize((max_width, int(img.height * ratio)), Image.Resampling.LANCZOS)
     return img
 
-# 🧬 Conversion en base64 pour le canvas
-def pil_to_data_url(img):
-    buffer = io.BytesIO()
-    img.save(buffer, format="PNG")
-    encoded = base64.b64encode(buffer.getvalue()).decode()
-    return f"data:image/png;base64,{encoded}"
-
-# 🧠 Extraction OCR via OCR.Space
-def ocr_space_api(img_bytes, api_key="helloworld"):  # ← Remplace "helloworld" par ta vraie clé API
+# 🔍 Appel API OCR.Space
+def ocr_space_api(img_bytes, api_key="helloworld"):  # ← Remplace par ta clé API
     try:
         response = requests.post(
             "https://api.ocr.space/parse/image",
@@ -47,7 +39,7 @@ def ocr_space_api(img_bytes, api_key="helloworld"):  # ← Remplace "helloworld"
     except Exception as e:
         return f"[Erreur OCR] {e}"
 
-# 🧠 Analyse du texte OCR avec alias
+# 🧠 Indexation du texte OCR
 def index_and_match_fields_with_alias(text, field_keys, aliases):
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     raw_fields, raw_values = [], []
@@ -63,16 +55,16 @@ def index_and_match_fields_with_alias(text, field_keys, aliases):
     result = {raw_fields[i]: raw_values[i] for i in range(min(len(raw_fields), len(raw_values)))}
     return {key: result.get(key, "Non détecté") for key in field_keys}
 
-# 📥 Import image
+# 📥 Upload de l’image
 uploaded_file = st.file_uploader("📤 Importer une image technique", type=["jpg", "jpeg", "png"])
 if uploaded_file:
     img = Image.open(uploaded_file)
     rotation = st.selectbox("🔁 Rotation ?", [0, 90, 180, 270], index=0)
     img = preprocess_image(img, rotation)
-    st.image(img, caption="🖼️ Image d'origine", use_container_width=True)
+    st.image(img, caption="🖼️ Image traitée", use_container_width=True)
 
-    # 📦 Zone de rognage rectangulaire
-    st.markdown("### 🟧 Déplace / redimensionne le rectangle d’analyse")
+    # 🟧 Rectangle initial à déplacer/redimensionner
+    st.markdown("### 🔲 Sélectionne la zone d’analyse avec le rectangle")
     initial_rect = [{
         "type": "rect",
         "left": img.width // 4,
@@ -86,16 +78,15 @@ if uploaded_file:
 
     canvas_result = st_canvas(
         background_image=img,
-        background_image_url=pil_to_data_url(img),
         initial_drawing=initial_rect,
-        drawing_mode="transform",
+        drawing_mode="transform",  # ← Permet déplacement + resize
         update_streamlit=True,
         height=img.height,
         width=img.width,
         key="canvas"
     )
 
-    # ✂️ Analyse si rectangle détecté
+    # 📌 Rognage de la zone sélectionnée
     if canvas_result.json_data and canvas_result.json_data["objects"]:
         rect = canvas_result.json_data["objects"][0]
         x, y = rect["left"], rect["top"]
@@ -103,7 +94,7 @@ if uploaded_file:
         cropped_img = img.crop((x, y, x + w, y + h))
         st.image(cropped_img, caption="📌 Zone sélectionnée", use_container_width=True)
 
-        # 🧪 OCR sur zone rognée
+        # 🔍 OCR sur la zone rognée
         img_bytes = io.BytesIO()
         cropped_img.save(img_bytes, format="JPEG", quality=70)
         img_bytes.seek(0)
@@ -113,8 +104,8 @@ if uploaded_file:
             st.text(raw_text)
 
         results = index_and_match_fields_with_alias(raw_text, target_fields, field_aliases)
-        st.subheader("📊 Résultats OCR indexés :")
+        st.subheader("📊 Résultats extraits :")
         for key in target_fields:
             st.write(f"🔹 **{key}** → {results.get(key)}")
     else:
-        st.info("🔍 Ajuste le rectangle pour définir la zone d’analyse.")
+        st.info("🖱️ Déplace le rectangle et relâche pour lancer l’analyse.")
