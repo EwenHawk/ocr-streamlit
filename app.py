@@ -147,7 +147,7 @@ if uploaded_file:
 
                     if st.button("✅ Enregistrer les données dans Google Sheet"):
                         try:
-                            sheet_url = "https://docs.google.com/spreadsheets/d/TON_ID/edit"  # ✏️ modifie ici
+                            sheet_url = "https://docs.google.com/spreadsheets/d/1yhIVYOqibFnhKKCnbhw8v0f4n1MbfY_4uZhSotK44gc/edit"  # ✏️ modifie ici
                             worksheet_name = "Tests_Panneaux"
                             row = [results[key] for key in TARGET_KEYS]
                             send_to_sheet(row, sheet_url, worksheet_name)
