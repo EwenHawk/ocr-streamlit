@@ -4,6 +4,8 @@ from PIL import Image
 import io
 import re
 from streamlit_drawable_canvas import st_canvas
+import gspread
+from google.oauth2.service_account import Credentials
 
 TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
 
@@ -54,6 +56,18 @@ def ocr_space_api(img_bytes, api_key="helloworld"):
     except Exception as e:
         return {"error": str(e)}
 
+def send_to_sheet(row_data, sheet_url, worksheet_name):
+    scope = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
+    creds = Credentials.from_service_account_info(st.secrets["gspread_auth"], scopes=scope)
+    client = gspread.authorize(creds)
+    sheet = client.open_by_url(sheet_url).worksheet(worksheet_name)
+    sheet.append_row(row_data)
+
+    return True
+
 st.set_page_config(page_title="OCR ToolJet", page_icon="📤", layout="centered")
 st.title("🔍 OCR technique avec extraction intelligente")
 
@@ -82,7 +96,7 @@ if uploaded_file:
                 "left": canvas_width // 4,
                 "top": canvas_height // 4,
                 "width": canvas_width // 2,
-                "height": canvas_height // 6,  # ✅ Hauteur réduite
+                "height": canvas_height // 6,  # ✅ Hauteur réduite par 6
                 "fill": "rgba(255,165,0,0.3)",
                 "stroke": "orange",
                 "strokeWidth": 2
@@ -131,29 +145,12 @@ if uploaded_file:
                     else:
                         st.success("✅ Tous les champs détectés avec succès.")
 
-import gspread
-from google.oauth2.service_account import Credentials
-
-def send_to_sheet(row_data, sheet_url, worksheet_name):
-    scope = [
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive"
-    ]
-    creds = Credentials.from_service_account_info(st.secrets["gspread_auth"], scopes=scope)
-    client = gspread.authorize(creds)
-    sheet = client.open_by_url(sheet_url).worksheet(worksheet_name)
-    sheet.append_row(row_data)
-
-    return True
-
-# 📥 Bouton d'enregistrement dans Google Sheet
-if st.button("✅ Enregistrer les données dans Google Sheet"):
-    try:
-        sheet_url = "https://docs.google.com/spreadsheets/d/TON_ID/edit"  # 🔁 Remplace avec ton URL
-        worksheet_name = "Tests_Panneaux"  # 🔁 Remplace avec ton nom d’onglet
-        row = [results[key] for key in TARGET_KEYS]
-        send_to_sheet(row, sheet_url, worksheet_name)
-        st.success("📡 Données enregistrées avec succès dans ton Google Sheet.")
-    except Exception as e:
-        st.error(f"❌ Échec d’enregistrement : {e}")
-
+                    if st.button("✅ Enregistrer les données dans Google Sheet"):
+                        try:
+                            sheet_url = "https://docs.google.com/spreadsheets/d/TON_ID/edit"  # ✏️ modifie ici
+                            worksheet_name = "Tests_Panneaux"
+                            row = [results[key] for key in TARGET_KEYS]
+                            send_to_sheet(row, sheet_url, worksheet_name)
+                            st.success("📡 Données enregistrées dans Google Sheet.")
+                        except Exception as e:
+                            st.error(f"❌ Erreur lors de l'enregistrement : {e}")
