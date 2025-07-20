@@ -7,17 +7,18 @@ from streamlit_drawable_canvas import st_canvas
 import gspread
 from google.oauth2.service_account import Credentials
 
-# Config
-st.set_page_config(page_title="OCR ToolJet", page_icon="📄", layout="centered")
+# 📄 Configuration
+st.set_page_config(page_title="OCR ToolJet", page_icon="📤", layout="centered")
 st.title("📤 OCR technique + validation ToolJet")
 
+# Champs à extraire
 target_fields = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
 field_aliases = {
     "voc": "Voc", "isc": "Isc", "pmax": "Pmax",
     "vpm": "Vpm", "ipm": "Ipm", "lpm": "Ipm"
 }
 
-# OCR function
+# 🔎 OCR via OCR.Space (renvoie toujours dict)
 def ocr_space_api(img_bytes, api_key="helloworld"):
     try:
         response = requests.post(
@@ -25,12 +26,11 @@ def ocr_space_api(img_bytes, api_key="helloworld"):
             files={"filename": ("image.jpg", img_bytes, "image/jpeg")},
             data={"apikey": api_key, "language": "eng", "isOverlayRequired": False}
         )
-        result = response.json()
-        return result
+        return response.json()
     except Exception as e:
         return {"error": str(e)}
 
-# Indexing function
+# 🧠 Extraction champs OCR
 def index_and_match_fields_with_alias(text, field_keys, aliases):
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     raw_fields, raw_values = [], []
@@ -46,7 +46,7 @@ def index_and_match_fields_with_alias(text, field_keys, aliases):
     result = {raw_fields[i]: raw_values[i] for i in range(min(len(raw_fields), len(raw_values)))}
     return {key: result.get(key, "Non détecté") for key in field_keys}
 
-# Connexion sécurisée à Google Sheets
+# 📤 Connexion Google Sheets via st.secrets
 def connect_to_tooljet_sheet_from_secrets(sheet_url, worksheet_title):
     scope = [
         "https://www.googleapis.com/auth/spreadsheets",
@@ -54,20 +54,19 @@ def connect_to_tooljet_sheet_from_secrets(sheet_url, worksheet_title):
     ]
     creds = Credentials.from_service_account_info(st.secrets["gspread_auth"], scopes=scope)
     client = gspread.authorize(creds)
-    sheet = client.open_by_url(sheet_url).worksheet(worksheet_title)
-    return sheet
+    return client.open_by_url(sheet_url).worksheet(worksheet_title)
 
-# Interface
+# 📸 Import image
 uploaded_file = st.file_uploader("📸 Importer une image technique", type=["jpg", "jpeg", "png"])
 if uploaded_file:
     img = Image.open(uploaded_file)
-    rotation = st.selectbox("🔁 Rotation ?", [0, 90, 180, 270], index=0)
+    rotation = st.selectbox("🔁 Rotation", [0, 90, 180, 270], index=0)
     img = img.rotate(-rotation, expand=True)
     st.image(img, caption="🖼️ Aperçu brut", use_container_width=False)
 
-    if st.button("🖼️ Je veux sélectionner une zone"):
+    # 📍 Clic pour afficher la zone de sélection
+    if st.button("🎯 Je sélectionne la zone à analyser"):
         canvas_width, canvas_height = img.size
-
         initial_rect = {
             "objects": [{
                 "type": "rect",
@@ -95,33 +94,41 @@ if uploaded_file:
             rect = canvas_result.json_data["objects"][0]
             x, y = rect["left"], rect["top"]
             w, h = rect["width"], rect["height"]
-            cropped_img = img.crop((x, y, x + w, y + h))
-            st.image(cropped_img, caption="📌 Zone sélectionnée", use_container_width=False)
 
-            img_bytes = io.BytesIO()
-            cropped_img.save(img_bytes, format="JPEG", quality=70)
-            img_bytes.seek(0)
-            ocr_result = ocr_space_api(img_bytes)
-
-            if "error" in ocr_result:
-                st.error(f"❌ Erreur OCR : {ocr_result['error']}")
+            # Limite taille max pour éviter saturation
+            if w * h > 3_000_000:
+                st.warning("📛 Zone trop grande, réduis-la pour optimiser l’analyse.")
             else:
-                raw_text = ocr_result.get("ParsedResults", [{}])[0].get("ParsedText", "")
-                with st.expander("📄 Texte OCR brut"):
-                    st.text(raw_text)
+                cropped_img = img.crop((x, y, x + w, y + h))
+                st.image(cropped_img, caption="📌 Zone sélectionnée", use_container_width=False)
 
-                results = index_and_match_fields_with_alias(raw_text, target_fields, field_aliases)
-                st.subheader("📊 Champs extraits :")
-                for key in target_fields:
-                    st.write(f"🔹 **{key}** → {results.get(key)}")
+                # OCR
+                img_bytes = io.BytesIO()
+                cropped_img.save(img_bytes, format="JPEG", quality=70)
+                img_bytes.seek(0)
+                ocr_result = ocr_space_api(img_bytes)
 
-                if st.button("✅ Je valide les données"):
-                    try:
-                        sheet_url = "https://docs.google.com/spreadsheets/d/1yhIVYOqibFnhKKCnbhw8v0f4n1MbfY_4uZhSotK44gc/edit"
-                        worksheet_name = "Tests_Panneaux"
-                        sheet = connect_to_tooljet_sheet_from_secrets(sheet_url, worksheet_name)
-                        row = [results.get(field, "") for field in target_fields]
-                        sheet.append_row(row)
-                        st.success("✅ Résultats enregistrés dans le Google Sheet ToolJet.")
-                    except Exception as e:
-                        st.error(f"❌ Envoi impossible : {e}")
+                if "error" in ocr_result:
+                    st.error(f"❌ Erreur OCR : {ocr_result['error']}")
+                else:
+                    raw_text = ocr_result.get("ParsedResults", [{}])[0].get("ParsedText", "")
+                    st.expander("📄 Texte OCR brut").text(raw_text[:3000])
+
+                    results = index_and_match_fields_with_alias(raw_text, target_fields, field_aliases)
+                    st.subheader("📊 Champs extraits :")
+                    for key in target_fields:
+                        st.write(f"🔹 **{key}** → {results.get(key)}")
+
+                    # ✅ Envoi vers Google Sheet
+                    if st.button("✅ Je valide les données"):
+                        try:
+                            sheet_url = "https://docs.google.com/spreadsheets/d/1yhIVYOqibFnhKKCnbhw8v0f4n1MbfY_4uZhSotK44gc/edit"
+                            worksheet_name = "Tests_Panneaux"
+                            sheet = connect_to_tooljet_sheet_from_secrets(sheet_url, worksheet_name)
+                            row = [results.get(field, "") for field in target_fields]
+                            sheet.append_row(row)
+                            st.success("✅ Résultats enregistrés dans ton Google Sheet ToolJet.")
+                        except Exception as e:
+                            st.error(f"❌ Échec lors de l'envoi : {e}")
+        else:
+            st.info("🖱️ Déplace et ajuste le rectangle avant de lancer l’analyse.")
