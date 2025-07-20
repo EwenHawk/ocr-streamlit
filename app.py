@@ -5,29 +5,28 @@ import io
 import re
 from streamlit_drawable_canvas import st_canvas
 
-# ⚙️ Config de la page
-st.set_page_config(page_title="OCR intelligent", page_icon="🔎", layout="centered")
-st.title("🧠 OCR indexé + zone sélectionnable")
-
-# 🎯 Champs à extraire
+# 🎯 Champs techniques à extraire
 target_fields = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
 field_aliases = {
     "voc": "Voc", "isc": "Isc", "pmax": "Pmax",
     "vpm": "Vpm", "ipm": "Ipm", "lpm": "Ipm"
 }
 
-# 🧼 Prétraitement image (rotation + redimension)
+# ⚙️ Configuration de la page
+st.set_page_config(page_title="OCR intelligent", page_icon="🔍", layout="centered")
+
+# 📉 Prétraitement image (rotation + resize)
 def preprocess_image(img, rotation):
     if rotation:
         img = img.rotate(-rotation, expand=True)
     max_width = 1024
     if img.width > max_width:
-        ratio = max_width / float(img.width)
+        ratio = max_width / img.width
         img = img.resize((max_width, int(img.height * ratio)), Image.Resampling.LANCZOS)
     return img
 
-# 🔍 Appel API OCR.Space
-def ocr_space_api(img_bytes, api_key="helloworld"):  # ← remplace par ta vraie clé API
+# 🔎 OCR via API OCR.Space
+def ocr_space_api(img_bytes, api_key="helloworld"):
     try:
         response = requests.post(
             "https://api.ocr.space/parse/image",
@@ -39,7 +38,7 @@ def ocr_space_api(img_bytes, api_key="helloworld"):  # ← remplace par ta vraie
     except Exception as e:
         return f"[Erreur OCR] {e}"
 
-# 🧠 Analyse OCR + indexation par alias
+# 🧠 Indexation des champs OCR avec alias
 def index_and_match_fields_with_alias(text, field_keys, aliases):
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     raw_fields, raw_values = [], []
@@ -55,16 +54,31 @@ def index_and_match_fields_with_alias(text, field_keys, aliases):
     result = {raw_fields[i]: raw_values[i] for i in range(min(len(raw_fields), len(raw_values)))}
     return {key: result.get(key, "Non détecté") for key in field_keys}
 
-# 📥 Interface utilisateur
-uploaded_file = st.file_uploader("📤 Importer une image technique", type=["jpg", "jpeg", "png"])
+# 🖼️ Interface Streamlit
+st.title("🧠 OCR technique avec sélection visuelle")
+
+uploaded_file = st.file_uploader("📤 Importer une image", type=["jpg", "jpeg", "png"])
 if uploaded_file:
     img = Image.open(uploaded_file)
-    rotation = st.selectbox("🔁 Rotation ?", [0, 90, 180, 270], index=0)
+    rotation = st.selectbox("🔁 Rotation de l'image", [0, 90, 180, 270], index=0)
     img = preprocess_image(img, rotation)
-    canvas_width, canvas_height = img.size
+    canvas_width, canvas_height = img.size  # Dimensions fixes
 
-    st.image(img, caption="🖼️ Image affichée", use_container_width=False)
-    st.markdown("### ✏️ Dessine un rectangle sur la zone à analyser")
+    # 🧯 Fix CSS pour désactiver mise à l’échelle
+    st.markdown("""
+        <style>
+        .stApp {
+            zoom: 100%;
+        }
+        .block-container {
+            max-width: none;
+            padding: 0.5rem 2rem;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    st.image(img, caption="🖼️ Image source", use_container_width=False)
+    st.markdown("### ✏️ Dessine un rectangle autour de la zone à analyser")
 
     canvas_result = st_canvas(
         background_image=img,
@@ -78,7 +92,6 @@ if uploaded_file:
         key="canvas"
     )
 
-    # ✂️ Rognage si rectangle présent
     if canvas_result.json_data and canvas_result.json_data["objects"]:
         rect = canvas_result.json_data["objects"][0]
         x, y = rect["left"], rect["top"]
@@ -95,8 +108,8 @@ if uploaded_file:
             st.text(raw_text)
 
         results = index_and_match_fields_with_alias(raw_text, target_fields, field_aliases)
-        st.subheader("📊 Champs techniques extraits :")
+        st.subheader("📊 Résultats OCR indexés")
         for key in target_fields:
             st.write(f"🔹 **{key}** → {results.get(key)}")
     else:
-        st.info("🖱️ Dessine un rectangle pour analyser une zone de l’image.")
+        st.info("🖱️ Dessine un rectangle avec ta souris pour lancer l’analyse OCR.")
