@@ -204,5 +204,4 @@ if st.session_state.results:
 
 if st.session_state.sheet_saved:
     st.success("📡 Données bien enregistrées dans Google Sheet.")
-    st.success("📡 Données bien enregistrées dans Google Sheet.")
     st.info("📎 Faîtes retour sur le navigateur pour revenir sur ToolJet.")
