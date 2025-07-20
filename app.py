@@ -88,19 +88,23 @@ else:
 
 # 📷 Source image
 source = st.radio("📷 Source de l’image :", ["Téléverser un fichier", "Prendre une photo"])
-img = None
+img, original_img = None, None
+
 if source == "Téléverser un fichier":
     uploaded_file = st.file_uploader("📁 Importer un fichier", type=["jpg", "jpeg", "png"])
     if uploaded_file:
         img = Image.open(uploaded_file)
+        original_img = img.copy()
 elif source == "Prendre une photo":
     photo = st.camera_input("📸 Capture via caméra")
     if photo:
         img = Image.open(photo)
+        original_img = img.copy()
 
 if img:
     rotation = st.selectbox("🔁 Rotation", [0, 90, 180, 270], index=0)
     img = img.rotate(-rotation, expand=True)
+    original_img = original_img.rotate(-rotation, expand=True)
 
     screen_max_width = 360
     if img.width > screen_max_width:
@@ -149,15 +153,25 @@ if img:
             rect = canvas_result.json_data["objects"][0]
             x, y = rect["left"], rect["top"]
             w, h = rect["width"], rect["height"]
-            cropped_img = img.crop((x, y, x + w, y + h))
 
-            # ✅ Appliquer filtre seulement si image assez grande
+            # 📐 Recalcul pour image originale
+            scale_x = original_img.width / img.width
+            scale_y = original_img.height / img.height
+
+            x_orig = int(x * scale_x)
+            y_orig = int(y * scale_y)
+            w_orig = int(w * scale_x)
+            h_orig = int(h * scale_y)
+
+            cropped_img = original_img.crop((x_orig, y_orig, x_orig + w_orig, y_orig + h_orig))
+
+            # ✨ Filtrage doux si crop assez grand
             if cropped_img.width > 300 and cropped_img.height > 300:
                 cropped_img = ImageEnhance.Sharpness(cropped_img).enhance(1.2)
                 cropped_img = ImageEnhance.Contrast(cropped_img).enhance(1.05)
                 cropped_img = ImageEnhance.Brightness(cropped_img).enhance(1.05)
-            bordered_img = ImageOps.expand(cropped_img, border=4, fill='gray')
 
+            bordered_img = ImageOps.expand(cropped_img, border=4, fill='gray')
             st.image(bordered_img, caption="🎯 Zone sélectionnée - optimisée", use_container_width=False)
 
             if st.button("📤 Lancer le traitement OCR"):
