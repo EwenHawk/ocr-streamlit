@@ -3,14 +3,16 @@ import requests
 from PIL import Image
 import io
 import re
-from streamlit_drawable_canvas import st_canvas
 import gspread
 from google.oauth2.service_account import Credentials
+from streamlit_drawable_canvas import st_canvas
 
 TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
 
 if "selection_mode" not in st.session_state:
     st.session_state.selection_mode = False
+if "sheet_saved" not in st.session_state:
+    st.session_state.sheet_saved = False
 
 def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
     aliases = {
@@ -65,7 +67,6 @@ def send_to_sheet(row_data, sheet_url, worksheet_name):
     client = gspread.authorize(creds)
     sheet = client.open_by_url(sheet_url).worksheet(worksheet_name)
     sheet.append_row(row_data)
-
     return True
 
 st.set_page_config(page_title="OCR ToolJet", page_icon="📤", layout="centered")
@@ -96,7 +97,7 @@ if uploaded_file:
                 "left": canvas_width // 4,
                 "top": canvas_height // 4,
                 "width": canvas_width // 2,
-                "height": canvas_height // 6,  # ✅ Hauteur réduite par 6
+                "height": canvas_height // 6,
                 "fill": "rgba(255,165,0,0.3)",
                 "stroke": "orange",
                 "strokeWidth": 2
@@ -127,10 +128,9 @@ if uploaded_file:
                 img_bytes.seek(0)
 
                 ocr_result = ocr_space_api(img_bytes)
-                if "error" in ocr_result:
-                    st.error(f"❌ Erreur OCR : {ocr_result['error']}")
-                else:
-                    raw_text = ocr_result.get("ParsedResults", [{}])[0].get("ParsedText", "")
+                parsed = ocr_result.get("ParsedResults", [])
+                if parsed and "ParsedText" in parsed[0]:
+                    raw_text = parsed[0]["ParsedText"]
                     st.subheader("📄 Texte OCR brut")
                     st.code(raw_text[:3000], language="text")
 
@@ -147,10 +147,16 @@ if uploaded_file:
 
                     if st.button("✅ Enregistrer les données dans Google Sheet"):
                         try:
-                            sheet_url = "https://docs.google.com/spreadsheets/d/1yhIVYOqibFnhKKCnbhw8v0f4n1MbfY_4uZhSotK44gc/edit?gid=1380545056#gid=1380545056"  # ✏️ modifie ici
+                            sheet_url = "https://docs.google.com/spreadsheets/d/1yhIVYOqibFnhKKCnbhw8v0f4n1MbfY_4uZhSotK44gc/edit"  # 👈 remplace TON_ID
                             worksheet_name = "Tests_Panneaux"
                             row = [results[key] for key in TARGET_KEYS]
                             send_to_sheet(row, sheet_url, worksheet_name)
-                            st.success("📡 Données enregistrées dans Google Sheet.")
+                            st.session_state.sheet_saved = True
                         except Exception as e:
                             st.error(f"❌ Erreur lors de l'enregistrement : {e}")
+
+                else:
+                    st.warning("⚠️ Aucun texte détecté dans cette zone OCR.")
+
+            if st.session_state.sheet_saved:
+                st.success("📡 Données bien enregistrées dans Google Sheet.")
