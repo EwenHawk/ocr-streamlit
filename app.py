@@ -6,6 +6,7 @@ import re
 import gspread
 from google.oauth2.service_account import Credentials
 from streamlit_drawable_canvas import st_canvas
+
 # 🔖 ID_Panneau transmis via URL
 id_panneau = st.query_params.get("id_panneau", "")
 
@@ -53,7 +54,7 @@ def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
 
     return {key: result.get(key, "Non détecté") for key in expected_keys}
 
-# 🔍 API OCR
+# 🔍 API OCR avec ta clé
 def ocr_space_api(img_bytes, api_key="K81047805588957"):
     try:
         response = requests.post(
@@ -79,13 +80,11 @@ def send_to_sheet(id_panneau, row_data, sheet_id, worksheet_name):
 st.set_page_config(page_title="OCR ToolJet", page_icon="📤", layout="centered")
 st.title("🔍 OCR technique avec capture et traitement intelligent")
 
-# 🔖 Affichage ID
 if id_panneau:
     st.info(f"🆔 ID_Panneau reçu : `{id_panneau}`")
 else:
     st.warning("⚠️ Aucun ID_Panneau détecté dans l’URL")
 
-# 📷 Source image
 source = st.radio("📷 Source de l’image :", ["Téléverser un fichier", "Prendre une photo"])
 img, original_img = None, None
 
@@ -153,7 +152,6 @@ if img:
             x, y = rect["left"], rect["top"]
             w, h = rect["width"], rect["height"]
 
-            # 📐 Recalcul pour image originale
             scale_x = original_img.width / img.width
             scale_y = original_img.height / img.height
 
@@ -164,7 +162,6 @@ if img:
 
             cropped_img = original_img.crop((x_orig, y_orig, x_orig + w_orig, y_orig + h_orig))
 
-            # ✨ Filtrage doux si crop assez grand
             if cropped_img.width > 300 and cropped_img.height > 300:
                 cropped_img = ImageEnhance.Sharpness(cropped_img).enhance(1.2)
                 cropped_img = ImageEnhance.Contrast(cropped_img).enhance(1.05)
