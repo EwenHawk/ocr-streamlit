@@ -166,18 +166,8 @@ if img:
                     st.warning("⚠️ Aucun texte détecté dans cette zone OCR.")
                     st.session_state.show_save_button = False
 
-                if st.session_state.sheet_saved:
-            st.success("📡 Données bien enregistrées dans Google Sheet.")
-        
-            redirect_url = "https://ton-site-de-retour.com"  # 🔁 modifie ici ton lien
-            st.info("🔁 Redirection en cours vers l’application…")
-            components.html(f"""
-                <script>
-                    setTimeout(function() {{
-                        window.location.href = "{redirect_url}";
-                    }}, 1500);
-                </script>
-            """, height=0)
+        if st.session_state.show_save_button:
+            if st.button("✅ Enregistrer les données dans Google Sheet"):
                 try:
                     sheet_id = "1yhIVYOqibFnhKKCnbhw8v0f4n1MbfY_4uZhSotK44gc"
                     worksheet_name = "Tests_Panneaux"
@@ -189,3 +179,13 @@ if img:
 
         if st.session_state.sheet_saved:
             st.success("📡 Données bien enregistrées dans Google Sheet.")
+            st.info("🔁 Redirection en cours vers l’application…")
+
+            redirect_url = "https://ton-site-de-retour.com"  # 🔁 modifie ici ton URL
+            components.html(f"""
+                <script>
+                    setTimeout(function() {{
+                        window.location.href = "{redirect_url}";
+                    }}, 1500);
+                </script>
+            """, height=0)
