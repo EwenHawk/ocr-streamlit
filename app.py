@@ -7,18 +7,21 @@ from streamlit_drawable_canvas import st_canvas
 import gspread
 from google.oauth2.service_account import Credentials
 
-# ⚙️ Configuration
+# 🧠 Initialisation de l’état
+if "selection_mode" not in st.session_state:
+    st.session_state.selection_mode = False
+
+# 🛠️ Configuration
 st.set_page_config(page_title="OCR ToolJet", page_icon="📤", layout="centered")
 st.title("📤 OCR technique + validation ToolJet")
 
-# Champs techniques à extraire
 target_fields = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
 field_aliases = {
     "voc": "Voc", "isc": "Isc", "pmax": "Pmax",
     "vpm": "Vpm", "ipm": "Ipm", "lpm": "Ipm"
 }
 
-# 🔎 Appel API OCR.Space
+# 🔎 OCR API
 def ocr_space_api(img_bytes, api_key="helloworld"):
     try:
         response = requests.post(
@@ -30,7 +33,7 @@ def ocr_space_api(img_bytes, api_key="helloworld"):
     except Exception as e:
         return {"error": str(e)}
 
-# 📊 Extraction et mappage des champs
+# 🔠 Extraction des valeurs
 def index_and_match_fields_with_alias(text, field_keys, aliases):
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     raw_fields, raw_values = [], []
@@ -46,7 +49,7 @@ def index_and_match_fields_with_alias(text, field_keys, aliases):
     result = {raw_fields[i]: raw_values[i] for i in range(min(len(raw_fields), len(raw_values)))}
     return {key: result.get(key, "Non détecté") for key in field_keys}
 
-# 🔐 Connexion Google Sheets via st.secrets
+# 🔐 Connexion sécurisée Sheets
 def connect_to_tooljet_sheet_from_secrets(sheet_url, worksheet_title):
     scope = [
         "https://www.googleapis.com/auth/spreadsheets",
@@ -56,14 +59,14 @@ def connect_to_tooljet_sheet_from_secrets(sheet_url, worksheet_title):
     client = gspread.authorize(creds)
     return client.open_by_url(sheet_url).worksheet(worksheet_title)
 
-# 📥 Interface
+# 📥 Import d'image
 uploaded_file = st.file_uploader("📸 Importer une image technique", type=["jpg", "jpeg", "png"])
 if uploaded_file:
     img = Image.open(uploaded_file)
     rotation = st.selectbox("🔁 Rotation", [0, 90, 180, 270], index=0)
     img = img.rotate(-rotation, expand=True)
 
-    # 🖼️ Compression d'affichage
+    # Compression d'affichage
     max_display_width = 800
     if img.width > max_display_width:
         ratio = max_display_width / img.width
@@ -71,8 +74,16 @@ if uploaded_file:
 
     st.image(img, caption="🖼️ Aperçu de l'image", use_container_width=False)
 
-    # 🎯 Sélection déclenchée par bouton
-    if st.button("🎯 Je sélectionne une zone à analyser"):
+    # 🎯 Boutons de sélection
+    if not st.session_state.selection_mode:
+        if st.button("🎯 Je sélectionne une zone à analyser"):
+            st.session_state.selection_mode = True
+    else:
+        if st.button("↩️ Réinitialiser la sélection"):
+            st.session_state.selection_mode = False
+
+    # 🟧 Zone de sélection active
+    if st.session_state.selection_mode:
         canvas_width, canvas_height = img.size
         initial_rect = {
             "objects": [{
