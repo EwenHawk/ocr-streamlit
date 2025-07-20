@@ -8,7 +8,7 @@ from google.oauth2.service_account import Credentials
 from streamlit_drawable_canvas import st_canvas
 
 # 🆔 Récupération de l'ID_Panneau depuis l'URL
-query_params = st.experimental_get_query_params()
+query_params = st.query_params()
 id_panneau = query_params.get("id_panneau", [""])[0]
 
 TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
