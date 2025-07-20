@@ -166,6 +166,19 @@ if img:
             x, y = rect["left"], rect["top"]
             w, h = rect["width"], rect["height"]
             cropped_img = img.crop((x, y, x + w, y + h))
+            
+            # 🧼 Prétraitement : binarisation (garder le noir, supprimer le fond)
+            gray = cropped_img.convert("L")  # convertit en niveaux de gris
+            
+            # 🔲 Seuil — ajustable selon contraste
+            threshold = 60  # plus bas = plus strict
+            bw = gray.point(lambda p: 0 if p < threshold else 255, mode="1")  # noir ou blanc
+            
+            # ✅ Appliquer fond blanc et texte noir
+            cleaned = Image.new("RGB", bw.size, (255, 255, 255))
+            cleaned.paste(bw.convert("RGB"))
+            
+            cropped_img = cleaned
             st.image(cropped_img, caption="📌 Zone sélectionnée", use_container_width=False)
 
             if st.button("📤 Lancer le traitement OCR"):
