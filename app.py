@@ -167,18 +167,23 @@ if img:
             w, h = rect["width"], rect["height"]
             cropped_img = img.crop((x, y, x + w, y + h))
             
-            # 🧼 Prétraitement : binarisation (garder le noir, supprimer le fond)
-            gray = cropped_img.convert("L")  # convertit en niveaux de gris
+            from PIL import ImageEnhance
+
+            # Convertir la zone croppée en niveaux de gris
+            gray = cropped_img.convert("L")
             
-            # 🔲 Seuil — ajustable selon contraste
-            threshold = 60  # plus bas = plus strict
-            bw = gray.point(lambda p: 0 if p < threshold else 255, mode="1")  # noir ou blanc
+            # Ajuster légèrement la luminosité (pour blanchir le quadrillage)
+            bright = ImageEnhance.Brightness(gray).enhance(1.3)
             
-            # ✅ Appliquer fond blanc et texte noir
-            cleaned = Image.new("RGB", bw.size, (255, 255, 255))
-            cleaned.paste(bw.convert("RGB"))
+            # Renforcer un peu le contraste pour garder les lettres
+            final = ImageEnhance.Contrast(bright).enhance(1.2)
+            
+            # Recomposer sur fond blanc
+            cleaned = Image.new("RGB", final.size, (255, 255, 255))
+            cleaned.paste(final.convert("RGB"))
             
             cropped_img = cleaned
+
             st.image(cropped_img, caption="📌 Zone sélectionnée", use_container_width=False)
 
             if st.button("📤 Lancer le traitement OCR"):
