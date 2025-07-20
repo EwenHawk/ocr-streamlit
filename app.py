@@ -181,7 +181,7 @@ if img:
             st.success("📡 Données bien enregistrées dans Google Sheet.")
             st.info("🔁 Redirection en cours vers l’application…")
 
-            redirect_url = "https://ton-site-de-retour.com"  # 🔁 modifie ici ton URL
+            redirect_url = "https://app.tooljet.ai/nathan-1751977029055/apps/51d5d9b4-fb52-47a4-8ec5-0ad214cc9467/base-de-donnee"  # 🔁 modifie ici ton URL
             components.html(f"""
                 <script>
                     setTimeout(function() {{
