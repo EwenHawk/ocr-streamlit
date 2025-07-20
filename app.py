@@ -102,8 +102,8 @@ if img:
 
     # ✂️ Rognage central
     w, h = img.size
-    left = int(w* 2 / 3)
-    right = int(w * 2 / 3)
+    left = int(w / 4)
+    right = int(w * 3 / 4)
     top = int(h / 4)
     bottom = int(h * 3 / 4)
     img = img.crop((left, top, right, bottom))
