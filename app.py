@@ -54,7 +54,7 @@ def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
     return {key: result.get(key, "Non détecté") for key in expected_keys}
 
 # 🔍 API OCR
-def ocr_space_api(img_bytes, api_key="helloworld"):
+def ocr_space_api(img_bytes, api_key="K81047805588957"):
     try:
         response = requests.post(
             "https://api.ocr.space/parse/image",
