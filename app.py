@@ -7,11 +7,9 @@ from streamlit_drawable_canvas import st_canvas
 
 TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
 
-# 📌 Initialisation de l'état
 if "selection_mode" not in st.session_state:
     st.session_state.selection_mode = False
 
-# 🔍 Extraction OCR robuste et arrondie
 def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
     aliases = {
         "voc": "Voc", "v_oc": "Voc",
@@ -45,7 +43,6 @@ def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
 
     return {key: result.get(key, "Non détecté") for key in expected_keys}
 
-# 🧠 Appel à l’API OCR.Space
 def ocr_space_api(img_bytes, api_key="helloworld"):
     try:
         response = requests.post(
@@ -57,7 +54,6 @@ def ocr_space_api(img_bytes, api_key="helloworld"):
     except Exception as e:
         return {"error": str(e)}
 
-# ⚙️ Interface utilisateur
 st.set_page_config(page_title="OCR ToolJet", page_icon="📤", layout="centered")
 st.title("🔍 OCR technique avec extraction intelligente")
 
@@ -67,7 +63,6 @@ if uploaded_file:
     rotation = st.selectbox("🔁 Rotation", [0, 90, 180, 270], index=0)
     img = img.rotate(-rotation, expand=True)
 
-    # Compression si image trop large
     max_width = 800
     if img.width > max_width:
         ratio = max_width / img.width
@@ -75,21 +70,19 @@ if uploaded_file:
 
     st.image(img, caption="🖼️ Aperçu", use_container_width=False)
 
-    # 🎯 Bouton déclencheur
     if not st.session_state.selection_mode:
         if st.button("🎯 Je sélectionne une zone à analyser"):
             st.session_state.selection_mode = True
 
-    # 🟧 Canvas interactif
     if st.session_state.selection_mode:
-        w, h = img.size
+        canvas_width, canvas_height = img.size
         initial_rect = {
             "objects": [{
                 "type": "rect",
-                "left": w // 4,
-                "top": h // 4,
-                "width": w // 2,
-                "height": h // 5,  # ➜ Hauteur plus fine
+                "left": canvas_width // 4,
+                "top": canvas_height // 4,
+                "width": canvas_width // 2,
+                "height": int(canvas_height / 2.3),  # ✅ hauteur divisée par 2.3
                 "fill": "rgba(255,165,0,0.3)",
                 "stroke": "orange",
                 "strokeWidth": 2
@@ -101,21 +94,19 @@ if uploaded_file:
             initial_drawing=initial_rect,
             drawing_mode="transform",
             update_streamlit=True,
-            height=h,
-            width=w,
+            height=canvas_height,
+            width=canvas_width,
             key="canvas"
         )
 
-        # ✂️ Traitement de la sélection
         if canvas_result.json_data and canvas_result.json_data["objects"]:
             rect = canvas_result.json_data["objects"][0]
             x, y = rect["left"], rect["top"]
-            w_rect, h_rect = rect["width"], rect["height"]
+            w, h = rect["width"], rect["height"]
 
-            cropped_img = img.crop((x, y, x + w_rect, y + h_rect))
+            cropped_img = img.crop((x, y, x + w, y + h))
             st.image(cropped_img, caption="📌 Zone sélectionnée", use_container_width=False)
 
-            # 📤 Lancement OCR
             if st.button("📤 Lancer le traitement OCR"):
                 img_bytes = io.BytesIO()
                 cropped_img.save(img_bytes, format="JPEG", quality=70)
