@@ -1,6 +1,6 @@
 import streamlit as st
 import requests
-from PIL import Image
+from PIL import Image, ImageEnhance
 import io
 import re
 import gspread
@@ -9,7 +9,6 @@ from streamlit_drawable_canvas import st_canvas
 
 # 🆔 Récupération de l'ID_Panneau depuis l'URL
 id_panneau = st.query_params.get("id_panneau", "")
-
 TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
 
 # États Streamlit
@@ -20,7 +19,7 @@ if "sheet_saved" not in st.session_state:
 if "results" not in st.session_state:
     st.session_state.results = {}
 
-# Extraction OCR propre
+# 📄 Extraction OCR
 def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
     aliases = {
         "voc": "Voc", "v_oc": "Voc",
@@ -29,10 +28,8 @@ def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
         "vpm": "Vpm", "v_pm": "Vpm", "vpm.": "Vpm",
         "ipm": "Ipm", "i_pm": "Ipm", "ipm.": "Ipm", "lpm": "Ipm"
     }
-
     lines = [line.strip().lower() for line in text.splitlines() if line.strip()]
     keys_found, values_found = [], []
-
     for line in lines:
         if line.endswith(":"):
             key = line.rstrip(":").strip()
@@ -42,7 +39,6 @@ def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
             match = re.match(r"^\d+[.,]?\d*\s*[a-z%ΩVWAm]*$", line, re.IGNORECASE)
             if match:
                 values_found.append(match.group(0).strip())
-
     result = {}
     for i in range(min(len(keys_found), len(values_found))):
         raw = values_found[i]
@@ -51,10 +47,9 @@ def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
             result[keys_found[i]] = str(round(float(clean), 1))
         except:
             result[keys_found[i]] = raw
-
     return {key: result.get(key, "Non détecté") for key in expected_keys}
 
-# API OCR.Space
+# 🧠 API OCR
 def ocr_space_api(img_bytes, api_key="helloworld"):
     try:
         response = requests.post(
@@ -66,44 +61,45 @@ def ocr_space_api(img_bytes, api_key="helloworld"):
     except Exception as e:
         return {"error": str(e)}
 
-# Enregistrement Google Sheet
+# 📝 Google Sheet
 def send_to_sheet(id_panneau, row_data, sheet_id, worksheet_name):
     scope = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = Credentials.from_service_account_info(st.secrets["gspread_auth"], scopes=scope)
     client = gspread.authorize(creds)
     sheet = client.open_by_key(sheet_id).worksheet(worksheet_name)
-
-    # ✅ Ajoute l'ID_Panneau en première colonne
     full_row = [id_panneau] + row_data
     sheet.append_row(full_row)
-
     return True
 
-# Interface Streamlit
+# 🎨 Interface Streamlit
 st.set_page_config(page_title="OCR ToolJet", page_icon="📤", layout="centered")
 st.title("🔍 OCR technique avec capture et traitement intelligent")
 
-# 👁️ Afficher l'ID_Panneau reçu
+# 👁️ Afficher l'ID reçu
 if id_panneau:
     st.info(f"🆔 ID_Panneau reçu : `{id_panneau}`")
 else:
     st.warning("⚠️ Aucun ID_Panneau détecté dans l’URL")
 
-# Choix de la source image
+# 📷 Chargement image
 source = st.radio("📷 Source de l’image :", ["Téléverser un fichier", "Prendre une photo"])
 img = None
+
 if source == "Téléverser un fichier":
     uploaded_file = st.file_uploader("📁 Importer un fichier", type=["jpg", "jpeg", "png"])
     if uploaded_file:
         img = Image.open(uploaded_file)
+
 elif source == "Prendre une photo":
     photo = st.camera_input("📸 Capture via caméra")
     if photo:
         img = Image.open(photo)
 
+# 🖼️ Traitement image
 if img:
     rotation = st.selectbox("🔁 Rotation", [0, 90, 180, 270], index=0)
     img = img.rotate(-rotation, expand=True)
+
     # ✂️ Rognage asymétrique : moins à gauche, plus à droite
     w, h = img.size
     left = int(w * 1/6)
@@ -112,31 +108,27 @@ if img:
     bottom = int(h * 3/4)
     img = img.crop((left, top, right, bottom))
 
-    st.image(img, caption="🖼️ Image rognée", use_container_width=False)
-    
+    # 📐 Redimensionnement éventuel
     max_width = 800
     if img.width > max_width:
         ratio = max_width / img.width
         img = img.resize((max_width, int(img.height * ratio)), Image.Resampling.LANCZOS)
 
+    st.image(img, caption="🖼️ Image rognée", use_container_width=False)
+
+    # 🎯 Activation mode sélection
     if not st.session_state.selection_mode:
         if st.button("🎯 Je sélectionne une zone à analyser"):
             st.session_state.selection_mode = True
 
+    # 🎨 Sélection via canvas
     if st.session_state.selection_mode:
         canvas_width, canvas_height = img.size
 
-        # 📱 Zone dynamique selon largeur
-        if canvas_width < 500:
-            rect_left = int(canvas_width * 0.1)
-            rect_top = int(canvas_height * 0.2)
-            rect_width = int(canvas_width * 1)
-            rect_height = int(canvas_height * 0.5)
-        else:
-            rect_left = canvas_width // 4
-            rect_top = canvas_height // 4
-            rect_width = canvas_width // 1
-            rect_height = canvas_height // 3
+        rect_left = int(canvas_width * 0.1)
+        rect_top = int(canvas_height * 0.2)
+        rect_width = int(canvas_width * 1)
+        rect_height = int(canvas_height * 0.5)
 
         initial_rect = {
             "objects": [{
@@ -166,30 +158,19 @@ if img:
             x, y = rect["left"], rect["top"]
             w, h = rect["width"], rect["height"]
             cropped_img = img.crop((x, y, x + w, y + h))
-            
-        from PIL import ImageEnhance
 
-        # 1. Convertir en niveaux de gris
-        gray = cropped_img.convert("L")
-        
-        # 2. Éclaircir plus fort pour atténuer le quadrillage
-        bright = ImageEnhance.Brightness(gray).enhance(1.5)
-        
-        # 3. Forcer les gris très clairs à devenir blancs
-        forced_white = bright.point(lambda p: 255 if p > 200 else p)
-        
-        # 4. Renforcer légèrement le contraste pour garder le texte
-        final = ImageEnhance.Contrast(forced_white).enhance(1.2)
-        
-        # 5. Recomposer sur fond blanc
-        cleaned = Image.new("RGB", final.size, (255, 255, 255))
-        cleaned.paste(final.convert("RGB"))
-        
-        # 🔄 Remplace l'image croppée par la version nettoyée
-        cropped_img = cleaned
+            # 🧼 Prétraitement doux quadrillage
+            gray = cropped_img.convert("L")
+            bright = ImageEnhance.Brightness(gray).enhance(1.5)
+            forced_white = bright.point(lambda p: 255 if p > 200 else p)
+            final = ImageEnhance.Contrast(forced_white).enhance(1.2)
+            cleaned = Image.new("RGB", final.size, (255, 255, 255))
+            cleaned.paste(final.convert("RGB"))
+            cropped_img = cleaned
 
-        st.image(cropped_img, caption="📌 Zone sélectionnée", use_container_width=False)
+            st.image(cropped_img, caption="📌 Zone sélectionnée (prétraitée)", use_container_width=False)
 
+            # 🔍 Traitement OCR
             if st.button("📤 Lancer le traitement OCR"):
                 img_bytes = io.BytesIO()
                 cropped_img.save(img_bytes, format="JPEG", quality=100)
@@ -201,13 +182,11 @@ if img:
                     raw_text = parsed[0]["ParsedText"]
                     st.subheader("📄 Texte OCR brut")
                     st.code(raw_text[:3000], language="text")
-
                     st.session_state.results = extract_ordered_fields(raw_text)
 
                     st.subheader("📊 Champs extraits et arrondis :")
                     for key, value in st.session_state.results.items():
                         st.write(f"🔹 **{key}** → {value}")
-
                     missing = [k for k, v in st.session_state.results.items() if v == "Non détecté"]
                     if missing:
                         st.warning(f"⚠️ Champs non détectés : {', '.join(missing)}")
@@ -217,9 +196,9 @@ if img:
                     st.warning("⚠️ Aucun texte détecté dans cette zone OCR.")
                     st.session_state.results = {}
 
-# ✅ Le bouton d'enregistrement s’affiche seulement après OCR
+# 📎 Enregistrement Google Sheet
 if st.session_state.results:
-    if st.button("✅ Enregistrer les données dans Google Sheet"):
+    if st.button.button("✅ Enregistrer les données dans Google Sheet"):
         try:
             sheet_id = "1yhIVYOqibFnhKKCnbhw8v0f4n1MbfY_4uZhSotK44gc"
             worksheet_name = "Tests_Panneaux"
