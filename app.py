@@ -119,8 +119,6 @@ if img:
         ratio = max_width / img.width
         img = img.resize((max_width, int(img.height * ratio)), Image.Resampling.LANCZOS)
 
-    st.image(img, caption="🖼️ Aperçu", use_container_width=False)
-
     if not st.session_state.selection_mode:
         if st.button("🎯 Je sélectionne une zone à analyser"):
             st.session_state.selection_mode = True
