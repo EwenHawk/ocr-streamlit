@@ -119,8 +119,8 @@ if img:
         canvas_width, canvas_height = img.size
         rect_left = int(canvas_width * 0.1)
         rect_top = int(canvas_height * 0.2)
-        rect_width = int(canvas_width * 0.5)
-        rect_height = int(canvas_height * 0.15)
+        rect_width = int(canvas_width * 0.7)
+        rect_height = int(canvas_height * 0.2)
 
         initial_rect = {
             "objects": [{
