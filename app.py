@@ -7,8 +7,9 @@ import gspread
 from google.oauth2.service_account import Credentials
 from streamlit_drawable_canvas import st_canvas
 
-# 🆔 ID_Panneau depuis URL
+# 🆔 Récupération de l'ID_Panneau depuis l'URL
 id_panneau = st.query_params.get("id_panneau", "")
+
 TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
 
 # États Streamlit
@@ -19,7 +20,7 @@ if "sheet_saved" not in st.session_state:
 if "results" not in st.session_state:
     st.session_state.results = {}
 
-# 🔍 OCR extraction
+# Extraction OCR propre
 def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
     aliases = {
         "voc": "Voc", "v_oc": "Voc",
@@ -28,8 +29,10 @@ def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
         "vpm": "Vpm", "v_pm": "Vpm", "vpm.": "Vpm",
         "ipm": "Ipm", "i_pm": "Ipm", "ipm.": "Ipm", "lpm": "Ipm"
     }
+
     lines = [line.strip().lower() for line in text.splitlines() if line.strip()]
     keys_found, values_found = [], []
+
     for line in lines:
         if line.endswith(":"):
             key = line.rstrip(":").strip()
@@ -48,9 +51,10 @@ def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
             result[keys_found[i]] = str(round(float(clean), 1))
         except:
             result[keys_found[i]] = raw
+
     return {key: result.get(key, "Non détecté") for key in expected_keys}
 
-# 📡 API OCR.space
+# API OCR.Space
 def ocr_space_api(img_bytes, api_key="helloworld"):
     try:
         response = requests.post(
@@ -62,28 +66,32 @@ def ocr_space_api(img_bytes, api_key="helloworld"):
     except Exception as e:
         return {"error": str(e)}
 
-# 📝 Enregistrement Google Sheet
+# Enregistrement Google Sheet
 def send_to_sheet(id_panneau, row_data, sheet_id, worksheet_name):
     scope = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = Credentials.from_service_account_info(st.secrets["gspread_auth"], scopes=scope)
     client = gspread.authorize(creds)
     sheet = client.open_by_key(sheet_id).worksheet(worksheet_name)
+
+    # ✅ Ajoute l'ID_Panneau en première colonne
     full_row = [id_panneau] + row_data
     sheet.append_row(full_row)
+
     return True
 
-# 🎨 Interface principale
+# Interface Streamlit
 st.set_page_config(page_title="OCR ToolJet", page_icon="📤", layout="centered")
-st.title("🔍 OCR technique avec rognage et sélection visuelle")
+st.title("🔍 OCR technique avec capture et traitement intelligent")
 
+# 👁️ Afficher l'ID_Panneau reçu
 if id_panneau:
     st.info(f"🆔 ID_Panneau reçu : `{id_panneau}`")
 else:
     st.warning("⚠️ Aucun ID_Panneau détecté dans l’URL")
 
+# Choix de la source image
 source = st.radio("📷 Source de l’image :", ["Téléverser un fichier", "Prendre une photo"])
 img = None
-
 if source == "Téléverser un fichier":
     uploaded_file = st.file_uploader("📁 Importer un fichier", type=["jpg", "jpeg", "png"])
     if uploaded_file:
@@ -96,7 +104,6 @@ elif source == "Prendre une photo":
 if img:
     rotation = st.selectbox("🔁 Rotation", [0, 90, 180, 270], index=0)
     img = img.rotate(-rotation, expand=True)
-
     # ✂️ Rognage asymétrique : moins à gauche, plus à droite
     w, h = img.size
     left = int(w * 1/6)
@@ -106,6 +113,13 @@ if img:
     img = img.crop((left, top, right, bottom))
 
     st.image(img, caption="🖼️ Image rognée", use_container_width=False)
+    
+    max_width = 800
+    if img.width > max_width:
+        ratio = max_width / img.width
+        img = img.resize((max_width, int(img.height * ratio)), Image.Resampling.LANCZOS)
+
+    st.image(img, caption="🖼️ Aperçu", use_container_width=False)
 
     if not st.session_state.selection_mode:
         if st.button("🎯 Je sélectionne une zone à analyser"):
@@ -113,13 +127,26 @@ if img:
 
     if st.session_state.selection_mode:
         canvas_width, canvas_height = img.size
+
+        # 📱 Zone dynamique selon largeur
+        if canvas_width < 500:
+            rect_left = int(canvas_width * 0.1)
+            rect_top = int(canvas_height * 0.2)
+            rect_width = int(canvas_width * 0.8)
+            rect_height = int(canvas_height * 0.25)
+        else:
+            rect_left = canvas_width // 4
+            rect_top = canvas_height // 4
+            rect_width = canvas_width // 1.5
+            rect_height = canvas_height // 5
+
         initial_rect = {
             "objects": [{
                 "type": "rect",
-                "left": int(canvas_width * 0.1),
-                "top": int(canvas_height * 0.2),
-                "width": int(canvas_width * 0.8),
-                "height": int(canvas_height * 0.25),
+                "left": rect_left,
+                "top": rect_top,
+                "width": rect_width,
+                "height": rect_height,
                 "fill": "rgba(255,165,0,0.3)",
                 "stroke": "orange",
                 "strokeWidth": 2
@@ -141,13 +168,7 @@ if img:
             x, y = rect["left"], rect["top"]
             w, h = rect["width"], rect["height"]
             cropped_img = img.crop((x, y, x + w, y + h))
-
-            # ✅ Fond blanc
-            bg = Image.new("RGB", cropped_img.size, (255, 255, 255))
-            bg.paste(cropped_img)
-            cropped_img = bg
-
-            st.image(cropped_img, caption="📌 Zone sélectionnée (fond blanc)", use_container_width=False)
+            st.image(cropped_img, caption="📌 Zone sélectionnée", use_container_width=False)
 
             if st.button("📤 Lancer le traitement OCR"):
                 img_bytes = io.BytesIO()
@@ -160,11 +181,13 @@ if img:
                     raw_text = parsed[0]["ParsedText"]
                     st.subheader("📄 Texte OCR brut")
                     st.code(raw_text[:3000], language="text")
+
                     st.session_state.results = extract_ordered_fields(raw_text)
 
                     st.subheader("📊 Champs extraits et arrondis :")
                     for key, value in st.session_state.results.items():
                         st.write(f"🔹 **{key}** → {value}")
+
                     missing = [k for k, v in st.session_state.results.items() if v == "Non détecté"]
                     if missing:
                         st.warning(f"⚠️ Champs non détectés : {', '.join(missing)}")
@@ -174,6 +197,7 @@ if img:
                     st.warning("⚠️ Aucun texte détecté dans cette zone OCR.")
                     st.session_state.results = {}
 
+# ✅ Le bouton d'enregistrement s’affiche seulement après OCR
 if st.session_state.results:
     if st.button("✅ Enregistrer les données dans Google Sheet"):
         try:
