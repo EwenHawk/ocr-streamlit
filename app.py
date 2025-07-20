@@ -130,3 +130,30 @@ if uploaded_file:
                         st.warning(f"⚠️ Champs non détectés : {', '.join(missing)}")
                     else:
                         st.success("✅ Tous les champs détectés avec succès.")
+
+import gspread
+from google.oauth2.service_account import Credentials
+
+def send_to_sheet(row_data, sheet_url, worksheet_name):
+    scope = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
+    creds = Credentials.from_service_account_info(st.secrets["gspread_auth"], scopes=scope)
+    client = gspread.authorize(creds)
+    sheet = client.open_by_url(sheet_url).worksheet(worksheet_name)
+    sheet.append_row(row_data)
+
+    return True
+
+# 📥 Bouton d'enregistrement dans Google Sheet
+if st.button("✅ Enregistrer les données dans Google Sheet"):
+    try:
+        sheet_url = "https://docs.google.com/spreadsheets/d/TON_ID/edit"  # 🔁 Remplace avec ton URL
+        worksheet_name = "Tests_Panneaux"  # 🔁 Remplace avec ton nom d’onglet
+        row = [results[key] for key in TARGET_KEYS]
+        send_to_sheet(row, sheet_url, worksheet_name)
+        st.success("📡 Données enregistrées avec succès dans ton Google Sheet.")
+    except Exception as e:
+        st.error(f"❌ Échec d’enregistrement : {e}")
+
