@@ -74,7 +74,7 @@ def send_to_sheet(id_panneau, row_data, sheet_id, worksheet_name):
 
 # 🎨 Interface principale
 st.set_page_config(page_title="OCR ToolJet", page_icon="📤", layout="centered")
-st.title("🔍 OCR technique avec capture et rognage intelligent")
+st.title("🔍 OCR technique avec rognage et sélection visuelle")
 
 if id_panneau:
     st.info(f"🆔 ID_Panneau reçu : `{id_panneau}`")
@@ -82,36 +82,28 @@ else:
     st.warning("⚠️ Aucun ID_Panneau détecté dans l’URL")
 
 source = st.radio("📷 Source de l’image :", ["Téléverser un fichier", "Prendre une photo"])
-img, original_img = None, None
+img = None
 
 if source == "Téléverser un fichier":
     uploaded_file = st.file_uploader("📁 Importer un fichier", type=["jpg", "jpeg", "png"])
     if uploaded_file:
         img = Image.open(uploaded_file)
-        original_img = img.copy()
 elif source == "Prendre une photo":
     photo = st.camera_input("📸 Capture via caméra")
     if photo:
         img = Image.open(photo)
-        original_img = img.copy()
 
 if img:
     rotation = st.selectbox("🔁 Rotation", [0, 90, 180, 270], index=0)
     img = img.rotate(-rotation, expand=True)
-    original_img = original_img.rotate(-rotation, expand=True)
 
-    # ✂️ Rognage central
+    # ✂️ Rognage asymétrique : moins à gauche, plus à droite
     w, h = img.size
-    
-    left = int(w * 1/6)       # coupe 16% à gauche
-    right = int(w * 2/3)      # coupe 33% à droite
-    top = int(h * 1/4)        # coupe 25% en haut
-    bottom = int(h * 3/4)     # garde jusqu’à 75%
-
-    
+    left = int(w * 1/6)
+    right = int(w * 2/3)
+    top = int(h * 1/4)
+    bottom = int(h * 3/4)
     img = img.crop((left, top, right, bottom))
-    original_img = original_img.crop((left, top, right, bottom))
-
 
     st.image(img, caption="🖼️ Image rognée", use_container_width=False)
 
@@ -148,10 +140,9 @@ if img:
             rect = canvas_result.json_data["objects"][0]
             x, y = rect["left"], rect["top"]
             w, h = rect["width"], rect["height"]
-
             cropped_img = img.crop((x, y, x + w, y + h))
 
-            # ✅ Ajout fond blanc
+            # ✅ Fond blanc
             bg = Image.new("RGB", cropped_img.size, (255, 255, 255))
             bg.paste(cropped_img)
             cropped_img = bg
