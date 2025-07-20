@@ -73,7 +73,6 @@ def send_to_sheet(id_panneau, row_data, sheet_id, worksheet_name):
     client = gspread.authorize(creds)
     sheet = client.open_by_key(sheet_id).worksheet(worksheet_name)
 
-    # ✅ Ajoute l'ID_Panneau en première colonne
     full_row = [id_panneau] + row_data
     sheet.append_row(full_row)
 
@@ -89,7 +88,6 @@ if id_panneau:
 else:
     st.warning("⚠️ Aucun ID_Panneau détecté dans l’URL")
 
-# Choix de la source image
 source = st.radio("📷 Source de l’image :", ["Téléverser un fichier", "Prendre une photo"])
 img = None
 if source == "Téléverser un fichier":
@@ -119,17 +117,18 @@ if img:
     if st.session_state.selection_mode:
         canvas_width, canvas_height = img.size
 
-        # 📱 Zone dynamique selon largeur
         if canvas_width < 500:
             rect_left = int(canvas_width * 0.1)
             rect_top = int(canvas_height * 0.2)
             rect_width = int(canvas_width * 0.8)
             rect_height = int(canvas_height * 0.25)
+            canvas_draw_width = canvas_width  # limiter
         else:
             rect_left = canvas_width // 4
             rect_top = canvas_height // 4
             rect_width = canvas_width // 1.5
             rect_height = canvas_height // 5
+            canvas_draw_width = min(canvas_width, 480)
 
         initial_rect = {
             "objects": [{
@@ -144,15 +143,17 @@ if img:
             }]
         }
 
+        st.markdown("<div style='overflow-x:auto;'>", unsafe_allow_html=True)
         canvas_result = st_canvas(
             background_image=img,
             initial_drawing=initial_rect,
             drawing_mode="transform",
             update_streamlit=True,
-            height=canvas_height,
-            width=canvas_width,
+            height=min(canvas_height, 600),
+            width=canvas_draw_width,
             key="canvas"
         )
+        st.markdown("</div>", unsafe_allow_html=True)
 
         if canvas_result.json_data and canvas_result.json_data["objects"]:
             rect = canvas_result.json_data["objects"][0]
@@ -188,7 +189,6 @@ if img:
                     st.warning("⚠️ Aucun texte détecté dans cette zone OCR.")
                     st.session_state.results = {}
 
-# ✅ Le bouton d'enregistrement s’affiche seulement après OCR
 if st.session_state.results:
     if st.button("✅ Enregistrer les données dans Google Sheet"):
         try:
@@ -202,4 +202,4 @@ if st.session_state.results:
 
 if st.session_state.sheet_saved:
     st.success("📡 Données bien enregistrées dans Google Sheet.")
-    st.info("📎 Faîtes retour sur le navigateur pour revenir sur ToolJet.")
+    st.info("📎 Faîtes retour sur le navigateur
