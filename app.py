@@ -130,8 +130,8 @@ if img:
         if canvas_width < 500:
             rect_left = int(canvas_width * 0.1)
             rect_top = int(canvas_height * 0.2)
-            rect_width = int(canvas_width * 0.8)
-            rect_height = int(canvas_height * 0.25)
+            rect_width = int(canvas_width * 1)
+            rect_height = int(canvas_height * 0.5)
         else:
             rect_left = canvas_width // 4
             rect_top = canvas_height // 4
