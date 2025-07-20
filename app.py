@@ -102,12 +102,14 @@ if img:
 
     # ✂️ Rognage central
     w, h = img.size
-    left = int(w / 4)
-    right = int(w * 3 / 4)
-    top = int(h / 4)
-    bottom = int(h * 3 / 4)
+    left = int(w * 1/3)                 # coupe 33% à gauche
+    right = int(w * 5/6)                # garde plus vers la droite
+    top = int(h * 1/4)                  # coupe 25% en haut
+    bottom = int(h * 3/4)               # garde jusqu'à 75% en bas
+    
     img = img.crop((left, top, right, bottom))
     original_img = original_img.crop((left, top, right, bottom))
+
 
     st.image(img, caption="🖼️ Image rognée", use_container_width=False)
 
