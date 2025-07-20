@@ -182,7 +182,7 @@ if img:
             st.success("📡 Données bien enregistrées dans Google Sheet.")
             st.info("✅ Tu peux revenir à ton application principale ci-dessous.")
             if st.button("🔙 Retour à ToolJet"):
-                redirect_url = "https://ton-site-de-retour.com"  # 📝 Modifie ici ton URL réelle
+                redirect_url = "https://app.tooljet.ai/nathan-1751977029055/apps/51d5d9b4-fb52-47a4-8ec5-0ad214cc9467/base-de-donnee"  # 📝 Modifie ici ton URL réelle
                 components.html(f"""
                     <script>
                         window.location.href = "{redirect_url}";
