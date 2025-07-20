@@ -112,8 +112,8 @@ if img:
                 "type": "rect",
                 "left": canvas_width // 4,
                 "top": canvas_height // 4,
-                "width": canvas_width // 2,
-                "height": canvas_height // 6,
+                "width": canvas_width // 1.5,
+                "height": canvas_height // 5,
                 "fill": "rgba(255,165,0,0.3)",
                 "stroke": "orange",
                 "strokeWidth": 2
