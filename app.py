@@ -6,7 +6,6 @@ import re
 import gspread
 from google.oauth2.service_account import Credentials
 from streamlit_drawable_canvas import st_canvas
-import streamlit.components.v1 as components
 
 TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
 
@@ -108,13 +107,26 @@ if img:
 
     if st.session_state.selection_mode:
         canvas_width, canvas_height = img.size
+
+        # 📱 Ajustement mobile-friendly
+        if canvas_width < 500:
+            rect_left = int(canvas_width * 0.1)
+            rect_top = int(canvas_height * 0.2)
+            rect_width = int(canvas_width * 0.8)
+            rect_height = int(canvas_height * 0.25)
+        else:
+            rect_left = canvas_width // 4
+            rect_top = canvas_height // 4
+            rect_width = canvas_width // 1.5
+            rect_height = canvas_height // 5
+
         initial_rect = {
             "objects": [{
                 "type": "rect",
-                "left": canvas_width // 4,
-                "top": canvas_height // 4,
-                "width": canvas_width // 1.5,
-                "height": canvas_height // 5,
+                "left": rect_left,
+                "top": rect_top,
+                "width": rect_width,
+                "height": rect_height,
                 "fill": "rgba(255,165,0,0.3)",
                 "stroke": "orange",
                 "strokeWidth": 2
@@ -177,14 +189,6 @@ if img:
                 except Exception as e:
                     st.error(f"❌ Erreur lors de l'enregistrement : {e}")
 
-        # 🔁 Bouton de retour après enregistrement
         if st.session_state.sheet_saved:
             st.success("📡 Données bien enregistrées dans Google Sheet.")
-            st.info("✅ Tu peux revenir à ton application principale ci-dessous.")
-            if st.button("🔙 Retour à ToolJet"):
-                redirect_url = "https://app.tooljet.ai/nathan-1751977029055/apps/51d5d9b4-fb52-47a4-8ec5-0ad214cc9467/base-de-donnee"  # 📝 Modifie ici ton URL réelle
-                components.html(f"""
-                    <script>
-                        window.location.href = "{redirect_url}";
-                    </script>
-                """, height=0)
+            st.info("📎 Faîtes retour sur le navigateur pour revenir sur ToolJet.")
