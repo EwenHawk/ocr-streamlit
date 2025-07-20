@@ -5,17 +5,18 @@ import io
 import re
 from streamlit_drawable_canvas import st_canvas
 
-# 🎯 Champs techniques à extraire
+# ⚙️ Configuration
+st.set_page_config(page_title="OCR Intelligent", page_icon="🧠", layout="centered")
+st.title("🧠 OCR indexé avec zone interactive")
+
+# 🎯 Champs à extraire
 target_fields = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
 field_aliases = {
     "voc": "Voc", "isc": "Isc", "pmax": "Pmax",
     "vpm": "Vpm", "ipm": "Ipm", "lpm": "Ipm"
 }
 
-# ⚙️ Configuration de la page
-st.set_page_config(page_title="OCR intelligent", page_icon="🔍", layout="centered")
-
-# 📉 Prétraitement image (rotation + resize)
+# 🧼 Prétraitement image
 def preprocess_image(img, rotation):
     if rotation:
         img = img.rotate(-rotation, expand=True)
@@ -25,7 +26,7 @@ def preprocess_image(img, rotation):
         img = img.resize((max_width, int(img.height * ratio)), Image.Resampling.LANCZOS)
     return img
 
-# 🔎 OCR via API OCR.Space
+# 🔎 OCR via OCR.Space
 def ocr_space_api(img_bytes, api_key="helloworld"):
     try:
         response = requests.post(
@@ -38,7 +39,7 @@ def ocr_space_api(img_bytes, api_key="helloworld"):
     except Exception as e:
         return f"[Erreur OCR] {e}"
 
-# 🧠 Indexation des champs OCR avec alias
+# 🧠 Indexation des champs + alias
 def index_and_match_fields_with_alias(text, field_keys, aliases):
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     raw_fields, raw_values = [], []
@@ -54,38 +55,34 @@ def index_and_match_fields_with_alias(text, field_keys, aliases):
     result = {raw_fields[i]: raw_values[i] for i in range(min(len(raw_fields), len(raw_values)))}
     return {key: result.get(key, "Non détecté") for key in field_keys}
 
-# 🖼️ Interface Streamlit
-st.title("🧠 OCR technique avec sélection visuelle")
-
+# 📥 Interface Streamlit
 uploaded_file = st.file_uploader("📤 Importer une image", type=["jpg", "jpeg", "png"])
 if uploaded_file:
     img = Image.open(uploaded_file)
-    rotation = st.selectbox("🔁 Rotation de l'image", [0, 90, 180, 270], index=0)
+    rotation = st.selectbox("🔁 Rotation", [0, 90, 180, 270], index=0)
     img = preprocess_image(img, rotation)
-    canvas_width, canvas_height = img.size  # Dimensions fixes
+    canvas_width, canvas_height = img.size
 
-    # 🧯 Fix CSS pour désactiver mise à l’échelle
-    st.markdown("""
-        <style>
-        .stApp {
-            zoom: 100%;
-        }
-        .block-container {
-            max-width: none;
-            padding: 0.5rem 2rem;
-        }
-        </style>
-    """, unsafe_allow_html=True)
+    st.image(img, caption="🖼️ Image chargée", use_container_width=False)
 
-    st.image(img, caption="🖼️ Image source", use_container_width=False)
-    st.markdown("### ✏️ Dessine un rectangle autour de la zone à analyser")
+    st.markdown("### ✏️ Déplace ou redimensionne le rectangle sur la zone à analyser")
+
+    # 🟧 Rectangle initial affiché sur le canvas
+    initial_rect = [{
+        "type": "rect",
+        "left": canvas_width // 4,
+        "top": canvas_height // 4,
+        "width": canvas_width // 2,
+        "height": canvas_height // 3,
+        "fill": "rgba(255,165,0,0.3)",
+        "stroke": "orange",
+        "strokeWidth": 2
+    }]
 
     canvas_result = st_canvas(
         background_image=img,
-        drawing_mode="rect",
-        stroke_width=2,
-        stroke_color="orange",
-        fill_color="rgba(255,165,0,0.3)",
+        initial_drawing=initial_rect,
+        drawing_mode="transform",  # ← permet déplacement + resize
         update_streamlit=True,
         height=canvas_height,
         width=canvas_width,
@@ -108,8 +105,8 @@ if uploaded_file:
             st.text(raw_text)
 
         results = index_and_match_fields_with_alias(raw_text, target_fields, field_aliases)
-        st.subheader("📊 Résultats OCR indexés")
+        st.subheader("📊 Champs techniques extraits :")
         for key in target_fields:
             st.write(f"🔹 **{key}** → {results.get(key)}")
     else:
-        st.info("🖱️ Dessine un rectangle avec ta souris pour lancer l’analyse OCR.")
+        st.info("🖱️ Déplace le rectangle pour définir la zone d’analyse.")
