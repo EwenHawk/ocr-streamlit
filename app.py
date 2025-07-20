@@ -72,11 +72,8 @@ def send_to_sheet(id_panneau, row_data, sheet_id, worksheet_name):
     creds = Credentials.from_service_account_info(st.secrets["gspread_auth"], scopes=scope)
     client = gspread.authorize(creds)
     sheet = client.open_by_key(sheet_id).worksheet(worksheet_name)
-
-    # ✅ Ajoute l'ID_Panneau en première colonne
     full_row = [id_panneau] + row_data
     sheet.append_row(full_row)
-
     return True
 
 # Interface Streamlit
@@ -91,24 +88,29 @@ else:
 
 # Choix de la source image
 source = st.radio("📷 Source de l’image :", ["Téléverser un fichier", "Prendre une photo"])
-img = None
+img, original_img = None, None
+
 if source == "Téléverser un fichier":
     uploaded_file = st.file_uploader("📁 Importer un fichier", type=["jpg", "jpeg", "png"])
     if uploaded_file:
         img = Image.open(uploaded_file)
+        original_img = img.copy()
 elif source == "Prendre une photo":
     photo = st.camera_input("📸 Capture via caméra")
     if photo:
         img = Image.open(photo)
+        original_img = img.copy()
 
 if img:
     rotation = st.selectbox("🔁 Rotation", [0, 90, 180, 270], index=0)
     img = img.rotate(-rotation, expand=True)
+    original_img = original_img.rotate(-rotation, expand=True)
 
-    max_width = 800
-    if img.width > max_width:
-        ratio = max_width / img.width
-        img = img.resize((max_width, int(img.height * ratio)), Image.Resampling.LANCZOS)
+    # 📱 Redimensionnement pour affichage mobile
+    max_display_width = 360
+    if img.width > max_display_width:
+        ratio = max_display_width / img.width
+        img = img.resize((max_display_width, int(img.height * ratio)), Image.Resampling.LANCZOS)
 
     st.image(img, caption="🖼️ Aperçu", use_container_width=False)
 
@@ -118,18 +120,10 @@ if img:
 
     if st.session_state.selection_mode:
         canvas_width, canvas_height = img.size
-
-        # 📱 Zone dynamique selon largeur
-        if canvas_width < 500:
-            rect_left = int(canvas_width * 0.1)
-            rect_top = int(canvas_height * 0.2)
-            rect_width = int(canvas_width * 0.8)
-            rect_height = int(canvas_height * 0.25)
-        else:
-            rect_left = canvas_width // 4
-            rect_top = canvas_height // 4
-            rect_width = canvas_width // 1.5
-            rect_height = canvas_height // 5
+        rect_left = int(canvas_width * 0.1)
+        rect_top = int(canvas_height * 0.2)
+        rect_width = int(canvas_width * 0.8)
+        rect_height = int(canvas_height * 0.25)
 
         initial_rect = {
             "objects": [{
@@ -158,8 +152,18 @@ if img:
             rect = canvas_result.json_data["objects"][0]
             x, y = rect["left"], rect["top"]
             w, h = rect["width"], rect["height"]
-            cropped_img = img.crop((x, y, x + w, y + h))
-            st.image(cropped_img, caption="📌 Zone sélectionnée", use_container_width=False)
+
+            # 📐 Recalcul sur l’image originale
+            scale_x = original_img.width / img.width
+            scale_y = original_img.height / img.height
+
+            x_orig = int(x * scale_x)
+            y_orig = int(y * scale_y)
+            w_orig = int(w * scale_x)
+            h_orig = int(h * scale_y)
+
+            cropped_img = original_img.crop((x_orig, y_orig, x_orig + w_orig, y_orig + h_orig))
+            st.image(cropped_img, caption="📌 Zone sélectionnée (pleine résolution)", use_container_width=False)
 
             if st.button("📤 Lancer le traitement OCR"):
                 img_bytes = io.BytesIO()
@@ -188,7 +192,7 @@ if img:
                     st.warning("⚠️ Aucun texte détecté dans cette zone OCR.")
                     st.session_state.results = {}
 
-# ✅ Le bouton d'enregistrement s’affiche seulement après OCR
+# ✅ Enregistrement dans Google Sheet
 if st.session_state.results:
     if st.button("✅ Enregistrer les données dans Google Sheet"):
         try:
