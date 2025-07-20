@@ -188,7 +188,7 @@ if img:
         # 🔄 Remplace l'image croppée par la version nettoyée
         cropped_img = cleaned
 
-            st.image(cropped_img, caption="📌 Zone sélectionnée", use_container_width=False)
+        st.image(cropped_img, caption="📌 Zone sélectionnée", use_container_width=False)
 
             if st.button("📤 Lancer le traitement OCR"):
                 img_bytes = io.BytesIO()
