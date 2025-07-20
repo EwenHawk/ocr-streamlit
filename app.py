@@ -6,6 +6,7 @@ import re
 import gspread
 from google.oauth2.service_account import Credentials
 from streamlit_drawable_canvas import st_canvas
+import streamlit.components.v1 as components
 
 TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
 
@@ -165,8 +166,18 @@ if img:
                     st.warning("⚠️ Aucun texte détecté dans cette zone OCR.")
                     st.session_state.show_save_button = False
 
-        if st.session_state.show_save_button:
-            if st.button("✅ Enregistrer les données dans Google Sheet"):
+        if st.session_state.sheet_saved:
+    st.success("📡 Données bien enregistrées dans Google Sheet.")
+
+    redirect_url = "https://ton-site-de-retour.com"  # 🔁 modifie ici ton lien
+    st.info("🔁 Redirection en cours vers l’application…")
+    components.html(f"""
+        <script>
+            setTimeout(function() {{
+                window.location.href = "{redirect_url}";
+            }}, 1500);
+        </script>
+    """, height=0)
                 try:
                     sheet_id = "1yhIVYOqibFnhKKCnbhw8v0f4n1MbfY_4uZhSotK44gc"
                     worksheet_name = "Tests_Panneaux"
