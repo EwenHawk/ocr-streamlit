@@ -5,18 +5,18 @@ import io
 import re
 from streamlit_drawable_canvas import st_canvas
 
-# ⚙️ Configuration
-st.set_page_config(page_title="OCR Intelligent", page_icon="🧠", layout="centered")
-st.title("🧠 OCR indexé avec zone interactive")
+# Configuration de la page
+st.set_page_config(page_title="OCR Intelligent", page_icon="🔎", layout="centered")
+st.title("🧠 OCR avec zone rectangulaire interactive")
 
-# 🎯 Champs à extraire
+# Champs à extraire
 target_fields = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
 field_aliases = {
     "voc": "Voc", "isc": "Isc", "pmax": "Pmax",
     "vpm": "Vpm", "ipm": "Ipm", "lpm": "Ipm"
 }
 
-# 🧼 Prétraitement image
+# Prétraitement image
 def preprocess_image(img, rotation):
     if rotation:
         img = img.rotate(-rotation, expand=True)
@@ -26,7 +26,7 @@ def preprocess_image(img, rotation):
         img = img.resize((max_width, int(img.height * ratio)), Image.Resampling.LANCZOS)
     return img
 
-# 🔎 OCR via OCR.Space
+# Appel à OCR.Space
 def ocr_space_api(img_bytes, api_key="helloworld"):
     try:
         response = requests.post(
@@ -39,7 +39,7 @@ def ocr_space_api(img_bytes, api_key="helloworld"):
     except Exception as e:
         return f"[Erreur OCR] {e}"
 
-# 🧠 Indexation des champs + alias
+# Analyse des champs avec alias
 def index_and_match_fields_with_alias(text, field_keys, aliases):
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     raw_fields, raw_values = [], []
@@ -55,7 +55,7 @@ def index_and_match_fields_with_alias(text, field_keys, aliases):
     result = {raw_fields[i]: raw_values[i] for i in range(min(len(raw_fields), len(raw_values)))}
     return {key: result.get(key, "Non détecté") for key in field_keys}
 
-# 📥 Interface Streamlit
+# Interface utilisateur
 uploaded_file = st.file_uploader("📤 Importer une image", type=["jpg", "jpeg", "png"])
 if uploaded_file:
     img = Image.open(uploaded_file)
@@ -63,32 +63,34 @@ if uploaded_file:
     img = preprocess_image(img, rotation)
     canvas_width, canvas_height = img.size
 
-    st.image(img, caption="🖼️ Image chargée", use_container_width=False)
+    st.image(img, caption="🖼️ Image affichée", use_container_width=False)
+    st.markdown("### 🟧 Déplace ou redimensionne le rectangle selon la zone à analyser")
 
-    st.markdown("### ✏️ Déplace ou redimensionne le rectangle sur la zone à analyser")
-
-    # 🟧 Rectangle initial affiché sur le canvas
-    initial_rect = [{
-        "type": "rect",
-        "left": canvas_width // 4,
-        "top": canvas_height // 4,
-        "width": canvas_width // 2,
-        "height": canvas_height // 3,
-        "fill": "rgba(255,165,0,0.3)",
-        "stroke": "orange",
-        "strokeWidth": 2
-    }]
+    # Rectangle préchargé sous forme de JSON valide
+    initial_rect = {
+        "objects": [{
+            "type": "rect",
+            "left": canvas_width // 4,
+            "top": canvas_height // 4,
+            "width": canvas_width // 2,
+            "height": canvas_height // 3,
+            "fill": "rgba(255,165,0,0.3)",
+            "stroke": "orange",
+            "strokeWidth": 2
+        }]
+    }
 
     canvas_result = st_canvas(
         background_image=img,
         initial_drawing=initial_rect,
-        drawing_mode="transform",  # ← permet déplacement + resize
+        drawing_mode="transform",
         update_streamlit=True,
         height=canvas_height,
         width=canvas_width,
         key="canvas"
     )
 
+    # Traitement OCR si rectangle présent
     if canvas_result.json_data and canvas_result.json_data["objects"]:
         rect = canvas_result.json_data["objects"][0]
         x, y = rect["left"], rect["top"]
@@ -105,8 +107,8 @@ if uploaded_file:
             st.text(raw_text)
 
         results = index_and_match_fields_with_alias(raw_text, target_fields, field_aliases)
-        st.subheader("📊 Champs techniques extraits :")
+        st.subheader("📊 Champs techniques extraits")
         for key in target_fields:
             st.write(f"🔹 **{key}** → {results.get(key)}")
     else:
-        st.info("🖱️ Déplace le rectangle pour définir la zone d’analyse.")
+        st.info("🖱️ Utilise le rectangle pour définir la zone à analyser.")
