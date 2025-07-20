@@ -177,15 +177,14 @@ if img:
                 except Exception as e:
                     st.error(f"❌ Erreur lors de l'enregistrement : {e}")
 
+        # 🔁 Bouton de retour après enregistrement
         if st.session_state.sheet_saved:
             st.success("📡 Données bien enregistrées dans Google Sheet.")
-            st.info("🔁 Redirection en cours vers l’application…")
-
-            redirect_url = "https://www.google.com"  # 🔁 modifie ici ton URL
-            components.html(f"""
-                <script>
-                    setTimeout(function() {{
+            st.info("✅ Tu peux revenir à ton application principale ci-dessous.")
+            if st.button("🔙 Retour à ToolJet"):
+                redirect_url = "https://ton-site-de-retour.com"  # 📝 Modifie ici ton URL réelle
+                components.html(f"""
+                    <script>
                         window.location.href = "{redirect_url}";
-                    }}, 1500);
-                </script>
-            """, height=0)
+                    </script>
+                """, height=0)
