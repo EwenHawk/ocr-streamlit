@@ -5,24 +5,18 @@ import io
 import re
 from streamlit_drawable_canvas import st_canvas
 
-# ⚙️ Config de la page
-st.set_page_config(page_title="OCR Indexé Intelligent", page_icon="🧠", layout="centered")
-st.title("🔗 Lecture OCR par indexation + alias + rognage visuel")
+# 🧭 Configuration de la page
+st.set_page_config(page_title="OCR Intelligent", page_icon="🔎", layout="centered")
+st.title("🧠 OCR Indexé + Zone sélectionnable")
 
 # 🎯 Champs à extraire
 target_fields = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
-
-# 🧠 Alias pour OCR imparfait
 field_aliases = {
-    "voc": "Voc",
-    "isc": "Isc",
-    "pmax": "Pmax",
-    "vpm": "Vpm",
-    "ipm": "Ipm",
-    "lpm": "Ipm"
+    "voc": "Voc", "isc": "Isc", "pmax": "Pmax",
+    "vpm": "Vpm", "ipm": "Ipm", "lpm": "Ipm"
 }
 
-# 📉 Prétraitement image
+# 🧼 Image preprocessing
 def preprocess_image(img, rotation):
     if rotation:
         img = img.rotate(-rotation, expand=True)
@@ -32,32 +26,28 @@ def preprocess_image(img, rotation):
         img = img.resize((max_width, int(img.height * ratio)), Image.Resampling.LANCZOS)
     return img
 
-# 🔍 API OCR.Space
-def ocr_space_api(img_bytes, api_key="helloworld"):  # Remplace par ta clé API réelle
+# 🔍 API OCR.space
+def ocr_space_api(img_bytes, api_key="helloworld"):  # 🧠 Remplace par ta vraie clé API
     try:
         response = requests.post(
             "https://api.ocr.space/parse/image",
             files={"filename": ("image.jpg", img_bytes, "image/jpeg")},
-            data={
-                "apikey": api_key,
-                "language": "eng",
-                "isOverlayRequired": False
-            }
+            data={"apikey": api_key, "language": "eng", "isOverlayRequired": False}
         )
         result = response.json()
         return result.get("ParsedResults", [{}])[0].get("ParsedText", "")
     except Exception as e:
         return f"[Erreur OCR] {e}"
 
-# 🧠 Extraction intelligente des champs
+# 🧠 Extraction des champs techniques
 def index_and_match_fields_with_alias(text, field_keys, aliases):
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     raw_fields, raw_values = [], []
     for line in lines:
         if line.endswith(":"):
-            key = line.rstrip(":").lower().strip()
-            if key in aliases:
-                raw_fields.append(aliases[key])
+            clean = line.rstrip(":").strip().lower()
+            if clean in aliases:
+                raw_fields.append(aliases[clean])
     for line in lines:
         match = re.match(r"^\d+[.,]?\d*\s*[A-Za-z%ΩVWAm]*$", line)
         if match:
@@ -65,23 +55,35 @@ def index_and_match_fields_with_alias(text, field_keys, aliases):
     result = {raw_fields[i]: raw_values[i] for i in range(min(len(raw_fields), len(raw_values)))}
     return {key: result.get(key, "Non détecté") for key in field_keys}
 
-# 📥 Upload image
+# 📥 Interface utilisateur
 uploaded_file = st.file_uploader("📤 Importer une image technique", type=["jpg", "jpeg", "png"])
 if uploaded_file:
     img = Image.open(uploaded_file)
     rotation = st.selectbox("🔁 Rotation ?", [0, 90, 180, 270], index=0)
     img = preprocess_image(img, rotation)
-    st.image(img, caption="🖼️ Image traitée", use_container_width=True)
+    st.image(img, caption="🖼️ Image d'origine", use_container_width=True)
 
-    st.markdown("### ✏️ Dessine la zone à analyser")
+    st.markdown("### 🔲 Déplace et redimensionne le rectangle sur la zone à analyser")
+
+    # 📐 Rectangle initial (modifiable)
+    initial_rect = [{
+        "type": "rect",
+        "left": img.width // 4,
+        "top": img.height // 4,
+        "width": img.width // 2,
+        "height": img.height // 3,
+        "fill": "rgba(255,165,0,0.3)",
+        "stroke": "orange",
+        "strokeWidth": 2
+    }]
+
     canvas_result = st_canvas(
-        fill_color="rgba(255, 165, 0, 0.3)",
-        stroke_width=2,
         background_image=img,
+        initial_drawing=initial_rect,
         update_streamlit=True,
         height=img.height,
         width=img.width,
-        drawing_mode="rect",
+        drawing_mode="transform",  # 🧠 Permet déplacement + resize
         key="canvas"
     )
 
@@ -105,4 +107,4 @@ if uploaded_file:
         for key in target_fields:
             st.write(f"🔹 **{key}** → {results.get(key)}")
     else:
-        st.info("➡️ Dessine une zone rectangulaire pour lancer l’analyse.")
+        st.info("🖱️ Utilise le rectangle pour sélectionner une zone et relâche la souris")
