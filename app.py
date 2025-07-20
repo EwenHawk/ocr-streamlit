@@ -5,23 +5,25 @@ import io
 import re
 from streamlit_drawable_canvas import st_canvas
 
+# 🎯 Champs cibles
+TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
+
 # 📌 Initialisation de l'état
 if "selection_mode" not in st.session_state:
     st.session_state.selection_mode = False
 
-# 🧠 Fonction de correspondance robuste champ → valeur
-def extract_ordered_fields(text, expected_keys=["Voc", "Isc", "Pmax", "Vpm", "Ipm"]):
+# 🧠 Fonction d’extraction OCR robuste
+def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
     aliases = {
         "voc": "Voc", "v_oc": "Voc",
         "isc": "Isc", "lsc": "Isc", "i_sc": "Isc",
         "pmax": "Pmax", "p_max": "Pmax", "pmax.": "Pmax",
-        "vpm": "Vpm", "vpm.": "Vpm", "v_pm": "Vpm",
-        "ipm": "Ipm", "ipm.": "Ipm", "i_pm": "Ipm"
+        "vpm": "Vpm", "v_pm": "Vpm", "vpm.": "Vpm",
+        "ipm": "Ipm", "i_pm": "Ipm", "ipm.": "Ipm", "lpm": "Ipm"
     }
 
     lines = [line.strip().lower() for line in text.splitlines() if line.strip()]
-    keys_found = []
-    values_found = []
+    keys_found, values_found = [], []
 
     for line in lines:
         if line.endswith(":"):
@@ -37,10 +39,9 @@ def extract_ordered_fields(text, expected_keys=["Voc", "Isc", "Pmax", "Vpm", "Ip
     for i in range(min(len(keys_found), len(values_found))):
         result[keys_found[i]] = values_found[i]
 
-    final_result = {key: result.get(key, "Non détecté") for key in expected_keys}
-    return final_result
+    return {key: result.get(key, "Non détecté") for key in expected_keys}
 
-# 🔧 API OCR.Space
+# 🔧 OCR.Space API
 def ocr_space_api(img_bytes, api_key="helloworld"):
     try:
         response = requests.post(
@@ -52,9 +53,9 @@ def ocr_space_api(img_bytes, api_key="helloworld"):
     except Exception as e:
         return {"error": str(e)}
 
-# 🛠️ Configuration Streamlit
+# ⚙️ Configuration Streamlit
 st.set_page_config(page_title="OCR ToolJet", page_icon="📤", layout="centered")
-st.title("🔍 OCR ordonné + extraction technique")
+st.title("🔍 OCR + extraction robuste par champs")
 
 # 📥 Upload image
 uploaded_file = st.file_uploader("📸 Importer une image technique", type=["jpg", "jpeg", "png"])
@@ -63,15 +64,15 @@ if uploaded_file:
     rotation = st.selectbox("🔁 Rotation", [0, 90, 180, 270], index=0)
     img = img.rotate(-rotation, expand=True)
 
-    # 🖼️ Compression
+    # 🖼️ Compression si image trop large
     max_width = 800
     if img.width > max_width:
         ratio = max_width / img.width
         img = img.resize((max_width, int(img.height * ratio)), Image.Resampling.LANCZOS)
 
-    st.image(img, caption="🖼️ Aperçu", use_container_width=False)
+    st.image(img, caption="🖼️ Aperçu de l'image", use_container_width=False)
 
-    # 🎯 Bouton pour activer la sélection
+    # 🎯 Bouton de sélection
     if not st.session_state.selection_mode:
         if st.button("🎯 Je sélectionne une zone à analyser"):
             st.session_state.selection_mode = True
@@ -107,15 +108,19 @@ if uploaded_file:
             rect = canvas_result.json_data["objects"][0]
             x, y = rect["left"], rect["top"]
             w, h = rect["width"], rect["height"]
-            cropped_img = img.crop((x, y, x + w, y + h))
-            st.image(cropped_img, caption="📌 Zone sélectionnée", use_container_width=False)
+
+            # 🔻 Réduction de la hauteur par 2 pour compenser le ratio élevé
+            reduced_h = h // 2
+
+            cropped_img = img.crop((x, y, x + w, y + reduced_h))
+            st.image(cropped_img, caption="📌 Zone sélectionnée réduite", use_container_width=False)
 
             if st.button("📤 Lancer le traitement OCR"):
                 img_bytes = io.BytesIO()
                 cropped_img.save(img_bytes, format="JPEG", quality=70)
                 img_bytes.seek(0)
-                ocr_result = ocr_space_api(img_bytes)
 
+                ocr_result = ocr_space_api(img_bytes)
                 if "error" in ocr_result:
                     st.error(f"❌ Erreur OCR : {ocr_result['error']}")
                 else:
@@ -123,13 +128,12 @@ if uploaded_file:
                     st.subheader("📄 Texte OCR brut")
                     st.code(raw_text[:3000], language="text")
 
-                    # 💡 Extraction ordonnée + alias
+                    # 🔍 Extraction champs robustes
                     results = extract_ordered_fields(raw_text)
                     st.subheader("📊 Champs extraits avec robustesse :")
                     for key, value in results.items():
                         st.write(f"🔹 **{key}** → {value}")
 
-                    # 🔔 Vérification
                     missing = [k for k, v in results.items() if v == "Non détecté"]
                     if missing:
                         st.warning(f"⚠️ Champs non détectés : {', '.join(missing)}")
