@@ -1,28 +1,23 @@
 import streamlit as st
-import requests
 from PIL import Image
-import io
-import re
 from streamlit_drawable_canvas import st_canvas
-import gspread
-from google.oauth2.service_account import Credentials
 
-# Initialisation de l’état de sélection
+# 📌 Initialisation de l'état de sélection
 if "selection_mode" not in st.session_state:
     st.session_state.selection_mode = False
 
-# Configuration de la page
+# 🛠️ Configuration
 st.set_page_config(page_title="OCR ToolJet", page_icon="📤", layout="centered")
-st.title("📤 OCR technique + validation ToolJet")
+st.title("🎯 Sélection de zone OCR")
 
-# Upload image
+# 📥 Import d’image
 uploaded_file = st.file_uploader("📸 Importer une image", type=["jpg", "jpeg", "png"])
 if uploaded_file:
     img = Image.open(uploaded_file)
     rotation = st.selectbox("🔁 Rotation", [0, 90, 180, 270], index=0)
     img = img.rotate(-rotation, expand=True)
 
-    # Compression si image trop large
+    # 🖼️ Compression si nécessaire
     max_width = 800
     if img.width > max_width:
         ratio = max_width / img.width
@@ -30,12 +25,12 @@ if uploaded_file:
 
     st.image(img, caption="🖼️ Aperçu", use_container_width=False)
 
-    # Affichage du bouton une seule fois
+    # 🎯 Bouton pour activer la sélection
     if not st.session_state.selection_mode:
         if st.button("🎯 Je sélectionne une zone à analyser"):
             st.session_state.selection_mode = True
 
-    # Zone de sélection affichée uniquement après clic
+    # 🟧 Canvas interactif affiché après clic
     if st.session_state.selection_mode:
         canvas_width, canvas_height = img.size
         initial_rect = {
@@ -51,7 +46,7 @@ if uploaded_file:
             }]
         }
 
-        st_canvas(
+        canvas_result = st_canvas(
             background_image=img,
             initial_drawing=initial_rect,
             drawing_mode="transform",
