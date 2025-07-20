@@ -14,8 +14,6 @@ if "selection_mode" not in st.session_state:
     st.session_state.selection_mode = False
 if "sheet_saved" not in st.session_state:
     st.session_state.sheet_saved = False
-if "show_save_button" not in st.session_state:
-    st.session_state.show_save_button = False
 if "results" not in st.session_state:
     st.session_state.results = {}
 
@@ -78,7 +76,6 @@ def send_to_sheet(row_data, sheet_id, worksheet_name):
 st.set_page_config(page_title="OCR ToolJet", page_icon="📤", layout="centered")
 st.title("🔍 OCR technique avec capture et traitement intelligent")
 
-# Choix de la source image
 source = st.radio("📷 Source de l’image :", ["Téléverser un fichier", "Prendre une photo"])
 img = None
 if source == "Téléverser un fichier":
@@ -108,7 +105,7 @@ if img:
     if st.session_state.selection_mode:
         canvas_width, canvas_height = img.size
 
-        # 📱 Ajustement mobile-friendly
+        # 📱 Zone dynamique selon largeur
         if canvas_width < 500:
             rect_left = int(canvas_width * 0.1)
             rect_top = int(canvas_height * 0.2)
@@ -163,7 +160,6 @@ if img:
                     st.code(raw_text[:3000], language="text")
 
                     st.session_state.results = extract_ordered_fields(raw_text)
-                    st.session_state.show_save_button = True
 
                     st.subheader("📊 Champs extraits et arrondis :")
                     for key, value in st.session_state.results.items():
@@ -176,19 +172,20 @@ if img:
                         st.success("✅ Tous les champs détectés avec succès.")
                 else:
                     st.warning("⚠️ Aucun texte détecté dans cette zone OCR.")
-                    st.session_state.show_save_button = False
+                    st.session_state.results = {}
 
-        if st.session_state.show_save_button:
-            if st.button("✅ Enregistrer les données dans Google Sheet"):
-                try:
-                    sheet_id = "1yhIVYOqibFnhKKCnbhw8v0f4n1MbfY_4uZhSotK44gc"
-                    worksheet_name = "Tests_Panneaux"
-                    row = [st.session_state.results.get(k, "Non détecté") for k in TARGET_KEYS]
-                    send_to_sheet(row, sheet_id, worksheet_name)
-                    st.session_state.sheet_saved = True
-                except Exception as e:
-                    st.error(f"❌ Erreur lors de l'enregistrement : {e}")
+# ✅ Le bouton d'enregistrement s’affiche seulement après OCR
+if st.session_state.results:
+    if st.button("✅ Enregistrer les données dans Google Sheet"):
+        try:
+            sheet_id = "1yhIVYOqibFnhKKCnbhw8v0f4n1MbfY_4uZhSotK44gc"
+            worksheet_name = "Tests_Panneaux"
+            row = [st.session_state.results.get(k, "Non détecté") for k in TARGET_KEYS]
+            send_to_sheet(row, sheet_id, worksheet_name)
+            st.session_state.sheet_saved = True
+        except Exception as e:
+            st.error(f"❌ Erreur lors de l'enregistrement : {e}")
 
-        if st.session_state.sheet_saved:
-            st.success("📡 Données bien enregistrées dans Google Sheet.")
-            st.info("📎 Faîtes retour sur le navigateur pour revenir sur ToolJet.")
+if st.session_state.sheet_saved:
+    st.success("📡 Données bien enregistrées dans Google Sheet.")
+    st.info("📎 Faîtes retour sur le navigateur pour revenir sur ToolJet.")
