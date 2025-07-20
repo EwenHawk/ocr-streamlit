@@ -28,10 +28,8 @@ def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
         "vpm": "Vpm", "v_pm": "Vpm", "vpm.": "Vpm",
         "ipm": "Ipm", "i_pm": "Ipm", "ipm.": "Ipm", "lpm": "Ipm"
     }
-
     lines = [line.strip().lower() for line in text.splitlines() if line.strip()]
     keys_found, values_found = [], []
-
     for line in lines:
         if line.endswith(":"):
             key = line.rstrip(":").strip()
@@ -50,7 +48,6 @@ def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
             result[keys_found[i]] = str(round(float(clean), 1))
         except:
             result[keys_found[i]] = raw
-
     return {key: result.get(key, "Non détecté") for key in expected_keys}
 
 # 📡 API OCR.space
@@ -77,15 +74,13 @@ def send_to_sheet(id_panneau, row_data, sheet_id, worksheet_name):
 
 # 🎨 Interface principale
 st.set_page_config(page_title="OCR ToolJet", page_icon="📤", layout="centered")
-st.title("🔍 OCR technique avec capture et traitement intelligent")
+st.title("🔍 OCR technique avec capture et rognage intelligent")
 
-# 📌 Affichage ID
 if id_panneau:
     st.info(f"🆔 ID_Panneau reçu : `{id_panneau}`")
 else:
     st.warning("⚠️ Aucun ID_Panneau détecté dans l’URL")
 
-# 📷 Chargement image
 source = st.radio("📷 Source de l’image :", ["Téléverser un fichier", "Prendre une photo"])
 img, original_img = None, None
 
@@ -105,12 +100,16 @@ if img:
     img = img.rotate(-rotation, expand=True)
     original_img = original_img.rotate(-rotation, expand=True)
 
-    screen_max_width = 360
-    if img.width > screen_max_width:
-        ratio = screen_max_width / img.width
-        img = img.resize((screen_max_width, int(img.height * ratio)), Image.Resampling.LANCZOS)
+    # ✂️ Rognage central
+    w, h = img.size
+    left = int(w / 3)
+    right = int(w * 2 / 3)
+    top = int(h / 4)
+    bottom = int(h * 3 / 4)
+    img = img.crop((left, top, right, bottom))
+    original_img = original_img.crop((left, top, right, bottom))
 
-    st.image(img, caption="🖼️ Aperçu téléphone", use_container_width=False)
+    st.image(img, caption="🖼️ Image rognée", use_container_width=False)
 
     if not st.session_state.selection_mode:
         if st.button("🎯 Je sélectionne une zone à analyser"):
@@ -118,7 +117,6 @@ if img:
 
     if st.session_state.selection_mode:
         canvas_width, canvas_height = img.size
-
         initial_rect = {
             "objects": [{
                 "type": "rect",
@@ -147,15 +145,7 @@ if img:
             x, y = rect["left"], rect["top"]
             w, h = rect["width"], rect["height"]
 
-            scale_x = original_img.width / img.width
-            scale_y = original_img.height / img.height
-
-            x_orig = int(x * scale_x)
-            y_orig = int(y * scale_y)
-            w_orig = int(w * scale_x)
-            h_orig = int(h * scale_y)
-
-            cropped_img = original_img.crop((x_orig, y_orig, x_orig + w_orig, y_orig + h_orig))
+            cropped_img = img.crop((x, y, x + w, y + h))
 
             # ✅ Ajout fond blanc
             bg = Image.new("RGB", cropped_img.size, (255, 255, 255))
@@ -180,7 +170,6 @@ if img:
                     st.subheader("📊 Champs extraits et arrondis :")
                     for key, value in st.session_state.results.items():
                         st.write(f"🔹 **{key}** → {value}")
-
                     missing = [k for k, v in st.session_state.results.items() if v == "Non détecté"]
                     if missing:
                         st.warning(f"⚠️ Champs non détectés : {', '.join(missing)}")
@@ -190,7 +179,6 @@ if img:
                     st.warning("⚠️ Aucun texte détecté dans cette zone OCR.")
                     st.session_state.results = {}
 
-# 💾 Enregistrement
 if st.session_state.results:
     if st.button("✅ Enregistrer les données dans Google Sheet"):
         try:
