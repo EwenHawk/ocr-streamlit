@@ -6,7 +6,7 @@ import re
 import gspread
 from google.oauth2.service_account import Credentials
 from streamlit_drawable_canvas import st_canvas
-
+st.write("📡 Réponse brute OCR:", ocr_result)
 # 🔖 ID_Panneau transmis via URL
 id_panneau = st.query_params.get("id_panneau", "")
 
