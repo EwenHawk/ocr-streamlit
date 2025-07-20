@@ -9,7 +9,6 @@ from streamlit_drawable_canvas import st_canvas
 
 # 🆔 ID_Panneau depuis URL
 id_panneau = st.query_params.get("id_panneau", "")
-
 TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
 
 # 📌 États Streamlit
@@ -29,7 +28,6 @@ def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
         "vpm": "Vpm", "v_pm": "Vpm", "vpm.": "Vpm",
         "ipm": "Ipm", "i_pm": "Ipm", "ipm.": "Ipm", "lpm": "Ipm"
     }
-
     lines = [line.strip().lower() for line in text.splitlines() if line.strip()]
     keys_found, values_found = [], []
 
@@ -88,39 +86,34 @@ else:
 
 # 📷 Chargement image
 source = st.radio("📷 Source de l’image :", ["Téléverser un fichier", "Prendre une photo"])
-img, original_img = None, None
+img = None
 
 if source == "Téléverser un fichier":
     uploaded_file = st.file_uploader("📁 Importer un fichier", type=["jpg", "jpeg", "png"])
     if uploaded_file:
         img = Image.open(uploaded_file)
-        original_img = img.copy()
 elif source == "Prendre une photo":
     photo = st.camera_input("📸 Capture via caméra")
     if photo:
         img = Image.open(photo)
-        original_img = img.copy()
 
 if img:
     rotation = st.selectbox("🔁 Rotation", [0, 90, 180, 270], index=0)
     img = img.rotate(-rotation, expand=True)
-    original_img = original_img.rotate(-rotation, expand=True)
 
-    # 📱 Affichage dézoomé
-    screen_max_width = 360
-    if img.width > screen_max_width:
-        ratio = screen_max_width / img.width
-        img = img.resize((screen_max_width, int(img.height * ratio)), Image.Resampling.LANCZOS)
+    max_width = 360
+    if img.width > max_width:
+        ratio = max_width / img.width
+        img = img.resize((max_width, int(img.height * ratio)), Image.Resampling.LANCZOS)
 
-    st.image(img, caption="🖼️ Aperçu téléphone", use_container_width=False)
+    st.image(img, caption="🖼️ Image à l'échelle du téléphone", use_container_width=False)
 
     if not st.session_state.selection_mode:
-        if st.button("🎯 Je sélectionne une zone à analyser"):
+        if st.button("🎯 Sélectionner une zone à analyser"):
             st.session_state.selection_mode = True
 
     if st.session_state.selection_mode:
         canvas_width, canvas_height = img.size
-
         initial_rect = {
             "objects": [{
                 "type": "rect",
@@ -148,18 +141,8 @@ if img:
             rect = canvas_result.json_data["objects"][0]
             x, y = rect["left"], rect["top"]
             w, h = rect["width"], rect["height"]
-
-            # 📐 Recalcul zone sur image originale
-            scale_x = original_img.width / img.width
-            scale_y = original_img.height / img.height
-
-            x_orig = int(x * scale_x)
-            y_orig = int(y * scale_y)
-            w_orig = int(w * scale_x)
-            h_orig = int(h * scale_y)
-
-            cropped_img = original_img.crop((x_orig, y_orig, x_orig + w_orig, y_orig + h_orig))
-            st.image(cropped_img, caption="📌 Zone sélectionnée (pleine résolution)", use_container_width=False)
+            cropped_img = img.crop((x, y, x + w, y + h))
+            st.image(cropped_img, caption="📌 Zone sélectionnée", use_container_width=False)
 
             if st.button("📤 Lancer le traitement OCR"):
                 img_bytes = io.BytesIO()
@@ -172,7 +155,6 @@ if img:
                     raw_text = parsed[0]["ParsedText"]
                     st.subheader("📄 Texte OCR brut")
                     st.code(raw_text[:3000], language="text")
-
                     st.session_state.results = extract_ordered_fields(raw_text)
 
                     st.subheader("📊 Champs extraits et arrondis :")
