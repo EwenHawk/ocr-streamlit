@@ -9,10 +9,9 @@ from streamlit_drawable_canvas import st_canvas
 
 # 🆔 ID_Panneau depuis URL
 id_panneau = st.query_params.get("id_panneau", "")
-
 TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
 
-# 📌 États Streamlit
+# États Streamlit
 if "selection_mode" not in st.session_state:
     st.session_state.selection_mode = False
 if "sheet_saved" not in st.session_state:
@@ -20,7 +19,7 @@ if "sheet_saved" not in st.session_state:
 if "results" not in st.session_state:
     st.session_state.results = {}
 
-# 🔎 OCR extraction
+# 🔍 OCR extraction
 def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
     aliases = {
         "voc": "Voc", "v_oc": "Voc",
@@ -80,7 +79,7 @@ def send_to_sheet(id_panneau, row_data, sheet_id, worksheet_name):
 st.set_page_config(page_title="OCR ToolJet", page_icon="📤", layout="centered")
 st.title("🔍 OCR technique avec capture et traitement intelligent")
 
-# 🆔 Affichage ID
+# 📌 Affichage ID
 if id_panneau:
     st.info(f"🆔 ID_Panneau reçu : `{id_panneau}`")
 else:
@@ -106,7 +105,6 @@ if img:
     img = img.rotate(-rotation, expand=True)
     original_img = original_img.rotate(-rotation, expand=True)
 
-    # 📱 Affichage dézoomé
     screen_max_width = 360
     if img.width > screen_max_width:
         ratio = screen_max_width / img.width
@@ -149,7 +147,6 @@ if img:
             x, y = rect["left"], rect["top"]
             w, h = rect["width"], rect["height"]
 
-            # 📐 Recalcul zone sur image originale
             scale_x = original_img.width / img.width
             scale_y = original_img.height / img.height
 
@@ -159,7 +156,13 @@ if img:
             h_orig = int(h * scale_y)
 
             cropped_img = original_img.crop((x_orig, y_orig, x_orig + w_orig, y_orig + h_orig))
-            st.image(cropped_img, caption="📌 Zone sélectionnée (pleine résolution)", use_container_width=False)
+
+            # ✅ Ajout fond blanc
+            bg = Image.new("RGB", cropped_img.size, (255, 255, 255))
+            bg.paste(cropped_img)
+            cropped_img = bg
+
+            st.image(cropped_img, caption="📌 Zone sélectionnée (fond blanc)", use_container_width=False)
 
             if st.button("📤 Lancer le traitement OCR"):
                 img_bytes = io.BytesIO()
@@ -172,7 +175,6 @@ if img:
                     raw_text = parsed[0]["ParsedText"]
                     st.subheader("📄 Texte OCR brut")
                     st.code(raw_text[:3000], language="text")
-
                     st.session_state.results = extract_ordered_fields(raw_text)
 
                     st.subheader("📊 Champs extraits et arrondis :")
@@ -201,5 +203,6 @@ if st.session_state.results:
             st.error(f"❌ Erreur lors de l'enregistrement : {e}")
 
 if st.session_state.sheet_saved:
+    st.success("📡 Données bien enregistrées dans Google Sheet.")
     st.success("📡 Données bien enregistrées dans Google Sheet.")
     st.info("📎 Faîtes retour sur le navigateur pour revenir sur ToolJet.")
