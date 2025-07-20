@@ -1,6 +1,6 @@
 import streamlit as st
 import requests
-from PIL import Image
+from PIL import Image, ImageEnhance, ImageOps
 import io
 import re
 import gspread
@@ -12,7 +12,7 @@ id_panneau = st.query_params.get("id_panneau", "")
 
 TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
 
-# 🧠 États Streamlit
+# États Streamlit
 if "selection_mode" not in st.session_state:
     st.session_state.selection_mode = False
 if "sheet_saved" not in st.session_state:
@@ -20,7 +20,7 @@ if "sheet_saved" not in st.session_state:
 if "results" not in st.session_state:
     st.session_state.results = {}
 
-# 🧪 Extraction OCR structurée
+# 🧪 Extraction OCR
 def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
     aliases = {
         "voc": "Voc", "v_oc": "Voc",
@@ -54,7 +54,7 @@ def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
 
     return {key: result.get(key, "Non détecté") for key in expected_keys}
 
-# 🔍 Appel API OCR.Space
+# 🔍 API OCR
 def ocr_space_api(img_bytes, api_key="helloworld"):
     try:
         response = requests.post(
@@ -66,29 +66,27 @@ def ocr_space_api(img_bytes, api_key="helloworld"):
     except Exception as e:
         return {"error": str(e)}
 
-# 📝 Envoi vers Google Sheet
+# 📤 Enregistrement dans Google Sheets
 def send_to_sheet(id_panneau, row_data, sheet_id, worksheet_name):
     scope = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = Credentials.from_service_account_info(st.secrets["gspread_auth"], scopes=scope)
     client = gspread.authorize(creds)
     sheet = client.open_by_key(sheet_id).worksheet(worksheet_name)
-
     full_row = [id_panneau] + row_data
     sheet.append_row(full_row)
-
     return True
 
-# 🎨 Interface Streamlit
+# 🎨 Interface principale
 st.set_page_config(page_title="OCR ToolJet", page_icon="📤", layout="centered")
 st.title("🔍 OCR technique avec capture et traitement intelligent")
 
-# 🔖 Affichage ID_Panneau reçu
+# 🔖 Affichage ID
 if id_panneau:
     st.info(f"🆔 ID_Panneau reçu : `{id_panneau}`")
 else:
     st.warning("⚠️ Aucun ID_Panneau détecté dans l’URL")
 
-# 📷 Choix image
+# 📷 Source image
 source = st.radio("📷 Source de l’image :", ["Téléverser un fichier", "Prendre une photo"])
 img = None
 if source == "Téléverser un fichier":
@@ -104,7 +102,6 @@ if img:
     rotation = st.selectbox("🔁 Rotation", [0, 90, 180, 270], index=0)
     img = img.rotate(-rotation, expand=True)
 
-    # 📱 Redimension image si écran mobile
     screen_max_width = 360
     if img.width > screen_max_width:
         ratio = screen_max_width / img.width
@@ -118,8 +115,6 @@ if img:
 
     if st.session_state.selection_mode:
         canvas_width, canvas_height = img.size
-
-        # 📱 Définition zone et canvas responsive
         rect_left = int(canvas_width * 0.1)
         rect_top = int(canvas_height * 0.2)
         rect_width = int(canvas_width * 0.8)
@@ -155,11 +150,18 @@ if img:
             x, y = rect["left"], rect["top"]
             w, h = rect["width"], rect["height"]
             cropped_img = img.crop((x, y, x + w, y + h))
-            st.image(cropped_img, caption="📌 Zone sélectionnée", use_container_width=False)
+
+            # 🎨 Filtrage esthétique
+            cropped_img = ImageOps.autocontrast(cropped_img, cutoff=3)
+            cropped_img = ImageEnhance.Brightness(cropped_img).enhance(1.1)
+            cropped_img = ImageEnhance.Sharpness(cropped_img).enhance(1.5)
+            bordered_img = ImageOps.expand(cropped_img, border=4, fill='gray')
+
+            st.image(bordered_img, caption="🎯 Zone sélectionnée - optimisée", use_container_width=False)
 
             if st.button("📤 Lancer le traitement OCR"):
                 img_bytes = io.BytesIO()
-                cropped_img.save(img_bytes, format="JPEG", quality=70)
+                bordered_img.save(img_bytes, format="JPEG", quality=95)
                 img_bytes.seek(0)
 
                 ocr_result = ocr_space_api(img_bytes)
@@ -184,7 +186,7 @@ if img:
                     st.warning("⚠️ Aucun texte détecté dans cette zone OCR.")
                     st.session_state.results = {}
 
-# 💾 Enregistrement vers Google Sheets
+# 💾 Enregistrement
 if st.session_state.results:
     if st.button("✅ Enregistrer les données dans Google Sheet"):
         try:
