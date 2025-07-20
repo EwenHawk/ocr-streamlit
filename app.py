@@ -5,9 +5,9 @@ import io
 import re
 from streamlit_drawable_canvas import st_canvas
 
-# 🧭 Configuration générale
-st.set_page_config(page_title="OCR Intelligent", page_icon="🔎", layout="centered")
-st.title("🧠 OCR Indexé avec Zone Dessinée")
+# ⚙️ Config de la page
+st.set_page_config(page_title="OCR intelligent", page_icon="🔎", layout="centered")
+st.title("🧠 OCR indexé + zone sélectionnable")
 
 # 🎯 Champs à extraire
 target_fields = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
@@ -16,7 +16,7 @@ field_aliases = {
     "vpm": "Vpm", "ipm": "Ipm", "lpm": "Ipm"
 }
 
-# 📉 Prétraitement image (rotation + redimensionnement)
+# 🧼 Prétraitement image (rotation + redimension)
 def preprocess_image(img, rotation):
     if rotation:
         img = img.rotate(-rotation, expand=True)
@@ -26,8 +26,8 @@ def preprocess_image(img, rotation):
         img = img.resize((max_width, int(img.height * ratio)), Image.Resampling.LANCZOS)
     return img
 
-# 🔍 OCR via API OCR.Space
-def ocr_space_api(img_bytes, api_key="helloworld"):  # ⚠️ Remplace par ta vraie clé API
+# 🔍 Appel API OCR.Space
+def ocr_space_api(img_bytes, api_key="helloworld"):  # ← remplace par ta vraie clé API
     try:
         response = requests.post(
             "https://api.ocr.space/parse/image",
@@ -39,7 +39,7 @@ def ocr_space_api(img_bytes, api_key="helloworld"):  # ⚠️ Remplace par ta vr
     except Exception as e:
         return f"[Erreur OCR] {e}"
 
-# 🧠 Indexation des champs reconnus + alias OCR
+# 🧠 Analyse OCR + indexation par alias
 def index_and_match_fields_with_alias(text, field_keys, aliases):
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     raw_fields, raw_values = [], []
@@ -55,15 +55,16 @@ def index_and_match_fields_with_alias(text, field_keys, aliases):
     result = {raw_fields[i]: raw_values[i] for i in range(min(len(raw_fields), len(raw_values)))}
     return {key: result.get(key, "Non détecté") for key in field_keys}
 
-# 📥 Import d’image
+# 📥 Interface utilisateur
 uploaded_file = st.file_uploader("📤 Importer une image technique", type=["jpg", "jpeg", "png"])
 if uploaded_file:
     img = Image.open(uploaded_file)
     rotation = st.selectbox("🔁 Rotation ?", [0, 90, 180, 270], index=0)
     img = preprocess_image(img, rotation)
-    st.image(img, caption="🖼️ Image chargée", use_container_width=False)
+    canvas_width, canvas_height = img.size
 
-    st.markdown("### ✏️ Dessine une zone rectangulaire à analyser")
+    st.image(img, caption="🖼️ Image affichée", use_container_width=False)
+    st.markdown("### ✏️ Dessine un rectangle sur la zone à analyser")
 
     canvas_result = st_canvas(
         background_image=img,
@@ -72,12 +73,12 @@ if uploaded_file:
         stroke_color="orange",
         fill_color="rgba(255,165,0,0.3)",
         update_streamlit=True,
-        height=img.height,
-        width=img.width,
+        height=canvas_height,
+        width=canvas_width,
         key="canvas"
     )
 
-    # ✂️ Si une zone est dessinée
+    # ✂️ Rognage si rectangle présent
     if canvas_result.json_data and canvas_result.json_data["objects"]:
         rect = canvas_result.json_data["objects"][0]
         x, y = rect["left"], rect["top"]
@@ -85,7 +86,6 @@ if uploaded_file:
         cropped_img = img.crop((x, y, x + w, y + h))
         st.image(cropped_img, caption="📌 Zone sélectionnée", use_container_width=False)
 
-        # 🔍 OCR sur la zone rognée
         img_bytes = io.BytesIO()
         cropped_img.save(img_bytes, format="JPEG", quality=70)
         img_bytes.seek(0)
@@ -99,4 +99,4 @@ if uploaded_file:
         for key in target_fields:
             st.write(f"🔹 **{key}** → {results.get(key)}")
     else:
-        st.info("🖱️ Dessine un rectangle pour déclencher l’analyse.")
+        st.info("🖱️ Dessine un rectangle pour analyser une zone de l’image.")
