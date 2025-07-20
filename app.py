@@ -7,12 +7,12 @@ import gspread
 from google.oauth2.service_account import Credentials
 from streamlit_drawable_canvas import st_canvas
 
-# 🆔 Récupération de l'ID_Panneau depuis l'URL
+# 🔖 ID_Panneau transmis via URL
 id_panneau = st.query_params.get("id_panneau", "")
 
 TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
 
-# États Streamlit
+# 🧠 États Streamlit
 if "selection_mode" not in st.session_state:
     st.session_state.selection_mode = False
 if "sheet_saved" not in st.session_state:
@@ -20,7 +20,7 @@ if "sheet_saved" not in st.session_state:
 if "results" not in st.session_state:
     st.session_state.results = {}
 
-# Extraction OCR propre
+# 🧪 Extraction OCR structurée
 def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
     aliases = {
         "voc": "Voc", "v_oc": "Voc",
@@ -54,7 +54,7 @@ def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
 
     return {key: result.get(key, "Non détecté") for key in expected_keys}
 
-# API OCR.Space
+# 🔍 Appel API OCR.Space
 def ocr_space_api(img_bytes, api_key="helloworld"):
     try:
         response = requests.post(
@@ -66,7 +66,7 @@ def ocr_space_api(img_bytes, api_key="helloworld"):
     except Exception as e:
         return {"error": str(e)}
 
-# Enregistrement Google Sheet
+# 📝 Envoi vers Google Sheet
 def send_to_sheet(id_panneau, row_data, sheet_id, worksheet_name):
     scope = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = Credentials.from_service_account_info(st.secrets["gspread_auth"], scopes=scope)
@@ -78,16 +78,17 @@ def send_to_sheet(id_panneau, row_data, sheet_id, worksheet_name):
 
     return True
 
-# Interface Streamlit
+# 🎨 Interface Streamlit
 st.set_page_config(page_title="OCR ToolJet", page_icon="📤", layout="centered")
 st.title("🔍 OCR technique avec capture et traitement intelligent")
 
-# 👁️ Afficher l'ID_Panneau reçu
+# 🔖 Affichage ID_Panneau reçu
 if id_panneau:
     st.info(f"🆔 ID_Panneau reçu : `{id_panneau}`")
 else:
     st.warning("⚠️ Aucun ID_Panneau détecté dans l’URL")
 
+# 📷 Choix image
 source = st.radio("📷 Source de l’image :", ["Téléverser un fichier", "Prendre une photo"])
 img = None
 if source == "Téléverser un fichier":
@@ -103,10 +104,11 @@ if img:
     rotation = st.selectbox("🔁 Rotation", [0, 90, 180, 270], index=0)
     img = img.rotate(-rotation, expand=True)
 
-    max_width = 800
-    if img.width > max_width:
-        ratio = max_width / img.width
-        img = img.resize((max_width, int(img.height * ratio)), Image.Resampling.LANCZOS)
+    # 📱 Redimension image si écran mobile
+    screen_max_width = 360
+    if img.width > screen_max_width:
+        ratio = screen_max_width / img.width
+        img = img.resize((screen_max_width, int(img.height * ratio)), Image.Resampling.LANCZOS)
 
     st.image(img, caption="🖼️ Aperçu", use_container_width=False)
 
@@ -117,18 +119,11 @@ if img:
     if st.session_state.selection_mode:
         canvas_width, canvas_height = img.size
 
-        if canvas_width < 500:
-            rect_left = int(canvas_width * 0.1)
-            rect_top = int(canvas_height * 0.2)
-            rect_width = int(canvas_width * 0.8)
-            rect_height = int(canvas_height * 0.25)
-            canvas_draw_width = canvas_width  # limiter
-        else:
-            rect_left = canvas_width // 4
-            rect_top = canvas_height // 4
-            rect_width = canvas_width // 1.5
-            rect_height = canvas_height // 5
-            canvas_draw_width = min(canvas_width, 480)
+        # 📱 Définition zone et canvas responsive
+        rect_left = int(canvas_width * 0.1)
+        rect_top = int(canvas_height * 0.2)
+        rect_width = int(canvas_width * 0.8)
+        rect_height = int(canvas_height * 0.25)
 
         initial_rect = {
             "objects": [{
@@ -143,14 +138,14 @@ if img:
             }]
         }
 
-        st.markdown("<div style='overflow-x:auto;'>", unsafe_allow_html=True)
+        st.markdown("<div style='max-width:100%; overflow-x:auto;'>", unsafe_allow_html=True)
         canvas_result = st_canvas(
             background_image=img,
             initial_drawing=initial_rect,
             drawing_mode="transform",
             update_streamlit=True,
-            height=min(canvas_height, 600),
-            width=canvas_draw_width,
+            height=min(canvas_height, 500),
+            width=min(canvas_width, 360),
             key="canvas"
         )
         st.markdown("</div>", unsafe_allow_html=True)
@@ -189,6 +184,7 @@ if img:
                     st.warning("⚠️ Aucun texte détecté dans cette zone OCR.")
                     st.session_state.results = {}
 
+# 💾 Enregistrement vers Google Sheets
 if st.session_state.results:
     if st.button("✅ Enregistrer les données dans Google Sheet"):
         try:
@@ -202,4 +198,4 @@ if st.session_state.results:
 
 if st.session_state.sheet_saved:
     st.success("📡 Données bien enregistrées dans Google Sheet.")
-    st.info("📎 Faîtes retour sur le navigateur
+    st.info("📎 Faîtes retour sur le navigateur pour revenir
