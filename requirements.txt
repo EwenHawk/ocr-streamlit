@@ -3,4 +3,4 @@ streamlit-drawable-canvas==0.8.0
 Pillow
 requests
 gspread
-oauth2client
+google-auth
