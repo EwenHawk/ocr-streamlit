@@ -5,11 +5,11 @@ import io
 import re
 from streamlit_drawable_canvas import st_canvas
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2.service_account import Credentials
 
 # Configuration de la page
 st.set_page_config(page_title="OCR ToolJet", page_icon="📄", layout="centered")
-st.title("📤 OCR interactif + validation vers Google Sheet")
+st.title("📤 OCR technique + validation ToolJet")
 
 # Champs à extraire
 target_fields = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
@@ -18,7 +18,7 @@ field_aliases = {
     "vpm": "Vpm", "ipm": "Ipm", "lpm": "Ipm"
 }
 
-# 📐 Prétraitement image
+# 🔧 Prétraitement image
 def preprocess_image(img, rotation):
     if rotation:
         img = img.rotate(-rotation, expand=True)
@@ -28,7 +28,7 @@ def preprocess_image(img, rotation):
         img = img.resize((max_width, int(img.height * ratio)), Image.Resampling.LANCZOS)
     return img
 
-# 🔍 OCR via API OCR.Space
+# 🔎 OCR via OCR.Space
 def ocr_space_api(img_bytes, api_key="helloworld"):
     try:
         response = requests.post(
@@ -41,7 +41,7 @@ def ocr_space_api(img_bytes, api_key="helloworld"):
     except Exception as e:
         return f"[Erreur OCR] {e}"
 
-# 🔠 Analyse du texte OCR
+# 🧠 Indexation des champs OCR avec alias
 def index_and_match_fields_with_alias(text, field_keys, aliases):
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     raw_fields, raw_values = [], []
@@ -57,30 +57,29 @@ def index_and_match_fields_with_alias(text, field_keys, aliases):
     result = {raw_fields[i]: raw_values[i] for i in range(min(len(raw_fields), len(raw_values)))}
     return {key: result.get(key, "Non détecté") for key in field_keys}
 
-# 🔗 Connexion à Google Sheets
-def connect_to_tooljet_sheet(json_path, sheet_url, worksheet_title):
+# 📤 Connexion sécurisée à Google Sheets via secrets
+def connect_to_tooljet_sheet_from_secrets(sheet_url, worksheet_title):
     scope = [
-        "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive"
     ]
-    creds = ServiceAccountCredentials.from_json_keyfile_name(json_path, scope)
+    creds = Credentials.from_service_account_info(st.secrets["gspread_auth"], scopes=scope)
     client = gspread.authorize(creds)
     sheet = client.open_by_url(sheet_url).worksheet(worksheet_title)
     return sheet
 
-# 📥 Chargement de l’image
+# 🖼️ Interface principale
 uploaded_file = st.file_uploader("📸 Importer une image technique", type=["jpg", "jpeg", "png"])
 if uploaded_file:
     img = Image.open(uploaded_file)
     rotation = st.selectbox("🔁 Rotation ?", [0, 90, 180, 270], index=0)
     img = preprocess_image(img, rotation)
     canvas_width, canvas_height = img.size
-    st.image(img, caption="🖼️ Image affichée", use_container_width=False)
 
-    st.markdown("### 🟧 Déplace ou ajuste le rectangle de sélection")
+    st.image(img, caption="🖼️ Image traitée", use_container_width=False)
+    st.markdown("### 🟧 Déplace le rectangle interactif")
 
-    # Rectangle initial
+    # Rectangle interactif par défaut
     initial_rect = {
         "objects": [{
             "type": "rect",
@@ -111,6 +110,7 @@ if uploaded_file:
         cropped_img = img.crop((x, y, x + w, y + h))
         st.image(cropped_img, caption="📌 Zone sélectionnée", use_container_width=False)
 
+        # OCR sur la zone
         img_bytes = io.BytesIO()
         cropped_img.save(img_bytes, format="JPEG", quality=70)
         img_bytes.seek(0)
@@ -124,20 +124,17 @@ if uploaded_file:
         for key in target_fields:
             st.write(f"🔹 **{key}** → {results.get(key)}")
 
-        # 📤 Bouton de validation
+        # ✅ Bouton de validation vers Google Sheets
         st.markdown("---")
         if st.button("✅ Je valide les données"):
             try:
-                # Paramètres de ta Google Sheet
                 sheet_url = "https://docs.google.com/spreadsheets/d/1yhIVYOqibFnhKKCnbhw8v0f4n1MbfY_4uZhSotK44gc/edit"
-                worksheet_name = "Feuille 1"  # adapte si nécessaire
-                json_path = "config/tooljet-ocr.json"  # à adapter selon emplacement réel
-
-                sheet = connect_to_tooljet_sheet(json_path, sheet_url, worksheet_name)
-                row = [results.get(key, "") for key in target_fields]
+                worksheet_name = "Tests_Panneaux"  # à adapter selon ton onglet
+                sheet = connect_to_tooljet_sheet_from_secrets(sheet_url, worksheet_name)
+                row = [results.get(field, "") for field in target_fields]
                 sheet.append_row(row)
-                st.success("✅ Résultats envoyés dans ton Google Sheet ToolJet !")
+                st.success("✅ Résultats enregistrés dans ton Google Sheet ToolJet !")
             except Exception as e:
-                st.error(f"❌ Échec de l'envoi : {e}")
+                st.error(f"❌ Échec lors de l'envoi : {e}")
     else:
-        st.info("🖱️ Ajuste le rectangle pour définir la zone d'analyse.")
+        st.info("🖱️ Déplace et ajuste le rectangle pour analyser une zone.")
