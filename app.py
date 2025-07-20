@@ -7,6 +7,10 @@ import gspread
 from google.oauth2.service_account import Credentials
 from streamlit_drawable_canvas import st_canvas
 
+# 🆔 Récupération de l'ID_Panneau depuis l'URL
+query_params = st.experimental_get_query_params()
+id_panneau = query_params.get("id_panneau", [""])[0]
+
 TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
 
 # États Streamlit
@@ -64,18 +68,29 @@ def ocr_space_api(img_bytes, api_key="helloworld"):
         return {"error": str(e)}
 
 # Enregistrement Google Sheet
-def send_to_sheet(row_data, sheet_id, worksheet_name):
+def send_to_sheet(id_panneau, row_data, sheet_id, worksheet_name):
     scope = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = Credentials.from_service_account_info(st.secrets["gspread_auth"], scopes=scope)
     client = gspread.authorize(creds)
     sheet = client.open_by_key(sheet_id).worksheet(worksheet_name)
-    sheet.append_row(row_data)
+
+    # ✅ Ajoute l'ID_Panneau en première colonne
+    full_row = [id_panneau] + row_data
+    sheet.append_row(full_row)
+
     return True
 
 # Interface Streamlit
 st.set_page_config(page_title="OCR ToolJet", page_icon="📤", layout="centered")
 st.title("🔍 OCR technique avec capture et traitement intelligent")
 
+# 👁️ Afficher l'ID_Panneau reçu
+if id_panneau:
+    st.info(f"🆔 ID_Panneau reçu : `{id_panneau}`")
+else:
+    st.warning("⚠️ Aucun ID_Panneau détecté dans l’URL")
+
+# Choix de la source image
 source = st.radio("📷 Source de l’image :", ["Téléverser un fichier", "Prendre une photo"])
 img = None
 if source == "Téléverser un fichier":
@@ -181,7 +196,7 @@ if st.session_state.results:
             sheet_id = "1yhIVYOqibFnhKKCnbhw8v0f4n1MbfY_4uZhSotK44gc"
             worksheet_name = "Tests_Panneaux"
             row = [st.session_state.results.get(k, "Non détecté") for k in TARGET_KEYS]
-            send_to_sheet(row, sheet_id, worksheet_name)
+            send_to_sheet(id_panneau, row, sheet_id, worksheet_name)
             st.session_state.sheet_saved = True
         except Exception as e:
             st.error(f"❌ Erreur lors de l'enregistrement : {e}")
