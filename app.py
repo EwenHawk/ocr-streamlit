@@ -82,7 +82,7 @@ if uploaded_file:
                 "left": canvas_width // 4,
                 "top": canvas_height // 4,
                 "width": canvas_width // 2,
-                "height": canvas_height // 2,  # ✅ Hauteur réduite
+                "height": canvas_height // 6,  # ✅ Hauteur réduite
                 "fill": "rgba(255,165,0,0.3)",
                 "stroke": "orange",
                 "strokeWidth": 2
