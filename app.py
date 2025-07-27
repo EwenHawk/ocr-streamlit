@@ -196,4 +196,11 @@ if st.session_state.results:
             sheet_id = "1yhIVYOqibFnhKKCnbhw8v0f4n1MbfY_4uZhSotK44gc"
             worksheet_name = "Tests_Panneaux"
             row = [st.session_state.results.get(k, "Non détecté") for k in TARGET_KEYS]
-            send_to_sheet(id_panneau, row
+            send_to_sheet(id_panneau, row, sheet_id, worksheet_name)
+            st.session_state.sheet_saved = True
+        except Exception as e:
+            st.error(f"❌ Erreur lors de l'enregistrement : {e}")
+
+if st.session_state.sheet_saved:
+    st.success("📡 Données bien enregistrées dans Google Sheet.")
+    st.info("📎 Faîtes retour sur le navigateur pour revenir sur ToolJet.")
