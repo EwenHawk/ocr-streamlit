@@ -98,12 +98,12 @@ if img:
     rotation = st.selectbox("🔁 Rotation", [0, 90, 180, 270], index=0)
     img = img.rotate(-rotation, expand=True)
 
-    # ✂️ Rognage
+    # ✂️ Rognage adouci (~1/3 de moins)
     w, h = img.size
-    left = int(w * 1/6)
-    right = int(w * 2/3)
-    top = int(h * 1/4)
-    bottom = int(h * 3/4)
+    left = int(w * 1/12)
+    right = int(w * 11/12)
+    top = int(h * 1/5)
+    bottom = int(h * 4/5)
     img = img.crop((left, top, right, bottom))
 
     # 📐 Redimensionnement mobile (max 360 px)
@@ -149,16 +149,15 @@ if img:
             w, h = rect["width"], rect["height"]
             cropped_img = img.crop((x, y, x + w, y + h))
 
-            # 🧼 Prétraitement doux
+            # 🧼 Prétraitement plus doux
             gray = cropped_img.convert("L")
-            bright = ImageEnhance.Brightness(gray).enhance(1.5)
-            forced_white = bright.point(lambda p: 255 if p > 200 else p)
-            final = ImageEnhance.Contrast(forced_white).enhance(1.2)
+            bright = ImageEnhance.Brightness(gray).enhance(1.2)
+            soft_white = bright.point(lambda p: 255 if p > 230 else p)
+            final = ImageEnhance.Contrast(soft_white).enhance(1.1)
             cleaned = Image.new("RGB", final.size, (255, 255, 255))
             cleaned.paste(final.convert("RGB"))
             cropped_img = cleaned
 
-            # Redimensionnement prétraité
             if cropped_img.width > max_width:
                 ratio = max_width / cropped_img.width
                 cropped_img = cropped_img.resize((max_width, int(cropped_img.height * ratio)), Image.Resampling.LANCZOS)
@@ -197,11 +196,4 @@ if st.session_state.results:
             sheet_id = "1yhIVYOqibFnhKKCnbhw8v0f4n1MbfY_4uZhSotK44gc"
             worksheet_name = "Tests_Panneaux"
             row = [st.session_state.results.get(k, "Non détecté") for k in TARGET_KEYS]
-            send_to_sheet(id_panneau, row, sheet_id, worksheet_name)
-            st.session_state.sheet_saved = True
-        except Exception as e:
-            st.error(f"❌ Erreur lors de l'enregistrement : {e}")
-
-if st.session_state.sheet_saved:
-    st.success("📡 Données bien enregistrées dans Google Sheet.")
-    st.info("📎 Faîtes retour sur le navigateur pour revenir sur ToolJet.")
+            send_to_sheet(id_panneau, row
