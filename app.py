@@ -87,6 +87,9 @@ if uploaded_file:
         if response.status_code == 200:
             result_json = response.json()
             ocr_text = result_json["ParsedResults"][0]["ParsedText"]
+            st.subheader("🔍 Texte brut OCR")
+            st.text(ocr_text)
+
         
             # 🧠 Extraction des champs
             TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
