@@ -3,11 +3,60 @@ from streamlit_drawable_canvas import st_canvas
 from PIL import Image, ImageEnhance
 import io
 import requests
+import re
+import gspread
+from google.oauth2.service_account import Credentials
 
 st.set_page_config(page_title="✂️ Rognage + OCR", layout="centered")
 st.title("📸 Rognage + Retouche + OCR 🔎")
 
+id_panneau = st.query_params.get("id_panneau", "")
+TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
+
 uploaded_file = st.file_uploader("Téléverse une image (max 200 MB)", type=["jpg", "png", "jpeg"])
+
+# 📄 Fonction extraction intelligente
+def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
+    aliases = {
+        "voc": "Voc", "v_oc": "Voc",
+        "isc": "Isc", "lsc": "Isc", "i_sc": "Isc",
+        "pmax": "Pmax", "p_max": "Pmax", "pmax.": "Pmax",
+        "vpm": "Vpm", "v_pm": "Vpm", "vpm.": "Vpm",
+        "ipm": "Ipm", "i_pm": "Ipm", "ipm.": "Ipm", "lpm": "Ipm"
+    }
+    lines = [line.strip().lower() for line in text.splitlines() if line.strip()]
+    keys_found, values_found = [], []
+
+    for line in lines:
+        if line.endswith(":"):
+            key = line.rstrip(":").strip()
+            if key in aliases:
+                keys_found.append(aliases[key])
+        else:
+            match = re.match(r"^\d+[.,]?\d*\s*[a-z%ΩVWAm]*$", line, re.IGNORECASE)
+            if match:
+                values_found.append(match.group(0).strip())
+
+    result = {}
+    for i in range(min(len(keys_found), len(values_found))):
+        raw = values_found[i]
+        clean = re.sub(r"[^\d.,\-]", "", raw).replace(",", ".")
+        try:
+            result[keys_found[i]] = str(round(float(clean), 1))
+        except:
+            result[keys_found[i]] = raw
+
+    return {key: result.get(key, "Non détecté") for key in expected_keys}
+
+# 📤 Fonction envoi vers Google Sheet
+def send_to_sheet(id_panneau, row_data, sheet_id, worksheet_name):
+    scope = ["https://www.googleapis.com/auth/spreadsheets"]
+    creds = Credentials.from_service_account_info(st.secrets["gspread_auth"], scopes=scope)
+    client = gspread.authorize(creds)
+    sheet = client.open_by_key(sheet_id).worksheet(worksheet_name)
+    full_row = [id_panneau] + row_data
+    sheet.append_row(full_row)
+    return True
 
 if uploaded_file:
     quality = 90
@@ -42,7 +91,6 @@ if uploaded_file:
 
     if canvas_result.json_data and canvas_result.json_data["objects"]:
         obj = canvas_result.json_data["objects"][0]
-
         scale_x = img.width / canvas_width
         scale_y = img.height / canvas_height
         x = int(obj["left"] * scale_x)
@@ -59,9 +107,7 @@ if uploaded_file:
         st.subheader("🔍 Image rognée")
         st.image(cropped, caption="📐 Zone sélectionnée")
 
-        enhancer = ImageEnhance.Contrast(cropped)
-        enhanced = enhancer.enhance(1.2)
-
+        enhanced = ImageEnhance.Contrast(cropped).enhance(1.2)
         img_bytes = io.BytesIO()
         enhanced.save(img_bytes, format="JPEG")
         img_bytes.seek(0)
@@ -75,50 +121,25 @@ if uploaded_file:
         if response.status_code == 200:
             result_json = response.json()
             ocr_text = result_json["ParsedResults"][0]["ParsedText"]
-
             st.subheader("🔍 Texte OCR brut")
             st.text(ocr_text)
 
-            TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
-
-            def extract_by_alias(text):
-                aliases = {
-                    "voc": "Voc", "v_oc": "Voc",
-                    "isc": "Isc", "lsc": "Isc", "i_sc": "Isc",
-                    "pmax": "Pmax", "p_max": "Pmax", "pmax.": "Pmax",
-                    "vpm": "Vpm", "v_pm": "Vpm", "vpm.": "Vpm",
-                    "ipm": "Ipm", "i_pm": "Ipm", "ipm.": "Ipm", "lpm": "Ipm"
-                }
-                lines = [line.strip() for line in text.splitlines() if line.strip()]
-                fields = {}
-                for i, line in enumerate(lines):
-                    for alias, key in aliases.items():
-                        if alias.lower() in line.lower():
-                            if any(unit in line for unit in ["V", "A", "W"]):
-                                fields[key] = line
-                            elif i + 1 < len(lines) and any(u in lines[i+1] for u in ["V", "A", "W"]):
-                                fields[key] = lines[i+1]
-                return fields
-
-            def extract_ordered_by_position(text, expected_keys):
-                lines = [line.strip() for line in text.splitlines() if line.strip()]
-                values_only = [
-                    line for line in lines
-                    if not line.endswith(":") and any(unit in line for unit in ["V", "A", "W"])
-                ]
-                fields = {}
-                for key, value in zip(expected_keys, values_only):
-                    fields[key] = value
-                return fields
-
-            extracted = extract_by_alias(ocr_text)
-            if len(extracted) < len(TARGET_KEYS):
-                extracted = extract_ordered_by_position(ocr_text, TARGET_KEYS)
-
+            extracted = extract_ordered_fields(ocr_text)
             st.subheader("📋 Champs extraits OCR")
             for key in TARGET_KEYS:
-                val = extracted.get(key, "non détecté")
+                val = extracted.get(key, "Non détecté")
                 st.text(f"{key} : {val}")
+
+            # ✅ Bouton d'envoi vers Google Sheet
+            if st.button("📤 Enregistrer dans Google Sheet"):
+                try:
+                    sheet_id = "1yhIVYOqibFnhKKCnbhw8v0f4n1MbfY_4uZhSotK44gc"
+                    worksheet_name = "Tests_Panneaux"
+                    row = [extracted.get(k, "Non détecté") for k in TARGET_KEYS]
+                    send_to_sheet(id_panneau, row, sheet_id, worksheet_name)
+                    st.success("✅ Données bien envoyées dans Google Sheet.")
+                except Exception as e:
+                    st.error(f"❌ Erreur : {e}")
         else:
             st.error(f"❌ Erreur OCR.space ({response.status_code}) : {response.text}")
 
