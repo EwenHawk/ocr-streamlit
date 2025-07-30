@@ -84,8 +84,18 @@ img_original = None
 if source == "Téléverser un fichier":
     uploaded = st.file_uploader("📁 Importer une image", type=["jpg", "jpeg", "png"])
     if uploaded:
-        img = Image.open(uploaded)
-        img_original = img.copy()
+        img = Image.open(uploaded).convert("RGB")
+
+# 📐 Rognage proportionnel
+width, height = img.size
+left = int(width * 0.2)
+right = int(width * 0.8)
+top = int(height * 0.25)
+bottom = int(height * 0.75)
+cropped_img = img.crop((left, top, right, bottom))
+
+img = cropped_img.copy()       # Image à afficher + dessiner
+img_original = cropped_img.copy()  # Image originale pour OCR
 elif source == "Prendre une photo":
     photo = st.camera_input("📸 Prendre une photo")
     if photo:
