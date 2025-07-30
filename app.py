@@ -1,199 +1,45 @@
-import time
-import io
-import re
-import requests
-
 import streamlit as st
 from streamlit_drawable_canvas import st_canvas
 from PIL import Image, ImageEnhance
-
+import io
+import requests
+import re
 import gspread
 from google.oauth2.service_account import Credentials
 
-# 1) Paramètres généraux
-TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
+# 🆔 Récupération de l'ID_Panneau depuis l'URL
 id_panneau = st.query_params.get("id_panneau", [""])[0]
+TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
+
+# États Streamlit
+for key, default in [
+    ("selection_mode", False),
+    ("sheet_saved", False),
+    ("results", {}),
+]:
+    if key not in st.session_state:
+        st.session_state[key] = default
 
 st.set_page_config(page_title="✂️ Rognage + OCR", layout="centered")
 st.title("📸 Rognage + Retouche + OCR 🔎")
 
-# 2) Helpers
+uploaded_file = st.file_uploader("Téléverse une image (max 200 MB)", type=["jpg", "png", "jpeg"])
 
+# Désactive le scroll sur le canvas pour améliorer le tactile
+st.markdown("""
+<style>
+  canvas {
+    touch-action: none;
+  }
+</style>
+""", unsafe_allow_html=True)
+
+# 📄 Fonction extraction intelligente
 def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
     aliases = {
-        "voc":"Voc","v_oc":"Voc",
-        "isc":"Isc","lsc":"Isc","i_sc":"Isc","isci":"Isc",
-        "pmax":"Pmax","p_max":"Pmax","pmax.":"Pmax",
-        "vpm":"Vpm","v_pm":"Vpm","vpm.":"Vpm",
-        "ipm":"Ipm","i_pm":"Ipm","ipm.":"Ipm","lpm":"Ipm"
-    }
-    def norm(s): return re.sub(r'[^a-zA-Z]','', s).lower()
-    lines = [l.strip() for l in text.splitlines() if l.strip()]
-    keys, vals = [], []
-    for l in lines:
-        k = norm(l)
-        if k in aliases:
-            keys.append(aliases[k])
-        elif re.match(r"^\d+[.,]?\d*\s*[a-z%ΩVWAm]*$", l, re.I):
-            vals.append(l)
-    out = {}
-    for i in range(min(len(keys), len(vals))):
-        raw = vals[i]
-        num = re.sub(r"[^\d.,\-]","", raw).replace(",",".")
-        try:
-            out[keys[i]] = str(round(float(num),1))
-        except:
-            out[keys[i]] = raw
-    return {k: out.get(k, "Non détecté") for k in expected_keys}
-
-def send_to_sheet(id_panneau, row, sheet_id, ws_name):
-    creds = Credentials.from_service_account_info(
-        st.secrets["gspread_auth"],
-        scopes=["https://www.googleapis.com/auth/spreadsheets"]
-    )
-    client = gspread.authorize(creds)
-    ws = client.open_by_key(sheet_id).worksheet(ws_name)
-    ws.append_row([id_panneau] + row)
-
-def compute_crop_on_original(img, bbox, L, T, canvas_w, canvas_h):
-    left, top, width, height = bbox
-    sx, sy = img.width / canvas_w, img.height / canvas_h
-    x, y = int(left * sx), int(top * sy)
-    w, h = int(width * sx), int(height * sy)
-    return img.crop((L + x, T + y, L + x + w, T + y + h))
-
-def autorefresh(interval_s: float = 1.0):
-    """
-    Force un rerun en ajoutant/modifiant un paramètre URL toutes les interval_s secondes,
-    tant que crop_done == False.
-    """
-    if st.session_state.get("crop_done", False):
-        return
-
-    now = time.time()
-    last = st.session_state.get("_last_refresh", None)
-    if last is None or (now - last) > interval_s:
-        st.session_state["_last_refresh"] = now
-        # on copie les query-params existants + un timestamp
-        params = dict(st.query_params)
-        params["_autorefresh"] = str(now)
-        st.experimental_set_query_params(**params)
-
-# 3) Upload + Préparation
-uploaded = st.file_uploader("Téléverse une image (max 200 MB)", type=["jpg","png","jpeg"])
-if not uploaded:
-    st.info("📤 Téléverse d'abord une image.")
-    st.stop()
-
-original = Image.open(uploaded).convert("RGB")
-original = original.rotate(-90, expand=True)
-w, h = original.size
-L, R = int(w * 0.05), int(w * 0.85)
-T, B = int(h * 0.3), int(h * 0.7)
-img = original.crop((L, T, R, B))
-st.image(img, use_container_width=True, caption="🖼️ Image optimisée")
-
-# 4) Canvas + Debounce
-c_w = 300
-c_h = int(c_w * img.height / img.width)
-
-# état session
-st.session_state.setdefault("last_move", 0.0)
-st.session_state.setdefault("crop_done", False)
-st.session_state.setdefault("prev_box", None)
-st.session_state.setdefault("rectangles", [{
-    "type": "rect",
-    "left": 30, "top": 30,
-    "width": 120, "height": 80,
-    "fill": "rgba(0, 0, 255, 0.2)",
-    "stroke": "blue", "strokeWidth": 2
-}])
-
-st.subheader("🟦 Ajuste la zone (glisse/redimensionne)")
-
-# Lance notre autorefresh maison
-autorefresh(1.0)
-
-canvas_result = st_canvas(
-    background_image=img,
-    width=c_w, height=c_h,
-    initial_drawing={"objects": st.session_state.rectangles},
-    drawing_mode="transform",
-    update_streamlit=True,
-    key="crop_canvas",
-)
-
-# Détecte le déplacement du rectangle
-if canvas_result.json_data and canvas_result.json_data.get("objects"):
-    st.session_state.rectangles = canvas_result.json_data["objects"]
-    o = st.session_state.rectangles[0]
-    box = (o["left"], o["top"], o["width"], o["height"])
-    now = time.time()
-    if box != st.session_state.prev_box:
-        st.session_state.last_move = now
-        st.session_state.crop_done = False
-        st.session_state.prev_box = box
-
-# 5) Crop + OCR après 3 s d’inactivité
-if (
-    st.session_state.prev_box is not None
-    and not st.session_state.crop_done
-    and time.time() - st.session_state.last_move > 3
-):
-    # découpe
-    crop = compute_crop_on_original(
-        original, st.session_state.prev_box, L, T, c_w, c_h
-    ).convert("RGB")
-    st.subheader("🔍 Image rognée")
-    st.image(crop, caption="📐 Zone sélectionnée")
-
-    # contraste + OCR
-    enh = ImageEnhance.Contrast(crop).enhance(1.2)
-    buf = io.BytesIO()
-    enh.save(buf, "JPEG")
-    buf.seek(0)
-
-    resp = requests.post(
-        "https://api.ocr.space/parse/image",
-        files={"file": ("img.jpg", buf, "image/jpeg")},
-        data={"apikey": "K81047805588957", "language": "eng", "OCREngine": 2}
-    )
-
-    if resp.status_code == 200:
-        txt = resp.json()["ParsedResults"][0]["ParsedText"]
-        st.subheader("🔍 Texte brut")
-        st.text(txt)
-
-        ext = extract_ordered_fields(txt)
-        st.subheader("📋 Résultats extraits")
-        for k in TARGET_KEYS:
-            st.write(f"{k} : {ext[k]}")
-
-        if st.button("📤 Envoyer dans Google Sheet"):
-            try:
-                send_to_sheet(
-                    id_panneau,
-                    [ext[k] for k in TARGET_KEYS],
-                    sheet_id="1yhIVYOqibFnhKKCnbhw8v0f4n1MbfY_4uZhSotK44gc",
-                    ws_name="Tests_Panneaux"
-                )
-                st.success("✅ Envoyé")
-            except Exception as e:
-                st.error(f"Erreur Sheets : {e}")
-    else:
-        st.error(f"OCR.space error {resp.status_code}")
-
-    # bouton téléchargement
-    dl = io.BytesIO()
-    enh.save(dl, "JPEG", quality=90, optimize=True)
-    st.download_button("📥 Télécharger", dl.getvalue(), "crop.jpg", "image/jpeg")
-
-    st.session_state.crop_done = True
-
-elif canvas_result.json_data and st.session_state.prev_box:
-    elapsed = time.time() - st.session_state.last_move
-    remaining = max(0, 3 - int(elapsed))
-    st.info(f"Crop dans {remaining}s…")
-
-else:
-    st.info("👆 Ajustez le rectangle pour lancer le crop+OCR.")
+        "voc": "Voc", "v_oc": "Voc",
+        "isc": "Isc", "lsc": "Isc", "i_sc": "Isc", "isci": "Isc", "Isci": "Isc",
+        "pmax": "Pmax", "p_max": "Pmax", "pmax.": "Pmax",
+        "vpm": "Vpm", "v_pm": "Vpm", "vpm.": "Vpm",
+        "ipm": "Ipm", "i_pm": "Ipm", "ipm.": "Ipm", "lpm": "Ipm",
+        "Iom": "Ipm", "iom": "Ipm", "lom": "Ipm", "Lom":
