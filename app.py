@@ -185,16 +185,6 @@ if uploaded_file:
         else:
             st.error(f"❌ OCR.space a renvoyé {resp.status_code}")
 
-        # Bouton de téléchargement
-        final_buf = io.BytesIO()
-        enhanced.save(final_buf, format="JPEG", quality=90, optimize=True)
-        st.download_button(
-            label="📥 Télécharger l'image finale",
-            data=final_buf.getvalue(),
-            file_name="image_rognée.jpg",
-            mime="image/jpeg"
-        )
-
     else:
         st.info("👆 Dessine une zone pour lancer le traitement.")
 else:
