@@ -83,13 +83,12 @@ else:
 # 📷 Import ou Caméra
 source = st.radio("📷 Source de l’image :", ["Téléverser un fichier", "Prendre une photo"])
 img = None
-img_original = None
 
 if source == "Téléverser un fichier":
     uploaded_file = st.file_uploader("📁 Importer un fichier", type=["jpg", "jpeg", "png"])
     if uploaded_file:
         img = Image.open(uploaded_file)
-        img_original = img.copy()
+        img_original = img.copy()  # 🔒 Garde l'image originale
 elif source == "Prendre une photo":
     photo = st.camera_input("📸 Capture via caméra")
     if photo:
@@ -99,6 +98,7 @@ elif source == "Prendre une photo":
 # 🖼️ Traitement
 if img:
     rotation = st.selectbox("🔁 Rotation", [0, 90, 180, 270], index=0)
+    img = img.rotate(-rotation, expand=True)
 
     # ✂️ Rognage initial
     w, h = img.size
@@ -106,19 +106,16 @@ if img:
     right = int(w * 11/12)
     top = int(h * 1/5)
     bottom = int(h * 4/5)
-    cropped_preview = img.crop((left, top, right, bottom))
-
-    # 🔄 Prévisualisation pivotée
-    preview_img = cropped_preview.rotate(-rotation, expand=True)
+    img = img.crop((left, top, right, bottom))
 
     # 📐 Redimensionnement
     max_width = 360
-    if preview_img.width > max_width:
-        ratio = max_width / preview_img.width
-        preview_img = preview_img.resize((max_width, int(preview_img.height * ratio)), Image.Resampling.LANCZOS)
+    if img.width > max_width:
+        ratio = max_width / img.width
+        img = img.resize((max_width, int(img.height * ratio)), Image.Resampling.LANCZOS)
+    canvas_width, canvas_height = img.size  # 📏 Dimensions canvas
 
-    canvas_width, canvas_height = preview_img.size
-    st.image(preview_img, caption="🖼️ Image prétraitée (rotation appliquée)", use_container_width=True)
+    st.image(img, caption="🖼️ Image rognée", use_container_width=True)
 
     if not st.session_state.selection_mode:
         if st.button("🎯 Je sélectionne une zone à analyser"):
@@ -139,7 +136,7 @@ if img:
         }
 
         canvas_result = st_canvas(
-            background_image=preview_img,
+            background_image=img,
             initial_drawing=initial_rect,
             drawing_mode="transform",
             update_streamlit=True,
@@ -149,11 +146,11 @@ if img:
         )
 
         if canvas_result.json_data and canvas_result.json_data["objects"]:
-            rect = canvas_result.json_data["objects"][-1]
+            rect = canvas_result.json_data["objects"][-1]  # 🆕 Prend la dernière modif
             x, y = rect["left"], rect["top"]
             w, h = rect["width"], rect["height"]
 
-            # 🧮 Conversion des coordonnées vers image originale
+            # 🧮 Correction des coordonnées
             scale_x = img_original.width / canvas_width
             scale_y = img_original.height / canvas_height
             x_orig = int(x * scale_x)
@@ -163,10 +160,11 @@ if img:
 
             cropped_img = img_original.crop((x_orig, y_orig, x_orig + w_orig, y_orig + h_orig))
 
-            # 🌀 Appliquer rotation finale sur la zone extraite
-            cropped_img = cropped_img.rotate(-rotation, expand=True)
+            if cropped_img.width > max_width:
+                ratio = max_width / cropped_img.width
+                cropped_img = cropped_img.resize((max_width, int(cropped_img.height * ratio)), Image.Resampling.LANCZOS)
 
-            # 🔧 Prétraitement doux
+            # 🧼 Prétraitement
             gray = cropped_img.convert("L")
             bright = ImageEnhance.Brightness(gray).enhance(1.2)
             soft_white = bright.point(lambda p: 255 if p > 230 else p)
@@ -175,11 +173,7 @@ if img:
             cleaned.paste(final.convert("RGB"))
             cropped_img = cleaned
 
-            if cropped_img.width > max_width:
-                ratio = max_width / cropped_img.width
-                cropped_img = cropped_img.resize((max_width, int(cropped_img.height * ratio)), Image.Resampling.LANCZOS)
-
-            st.image(cropped_img, caption="📌 Zone sélectionnée (traitée)", use_container_width=True)
+            st.image(cropped_img, caption="📌 Zone sélectionnée (prétraitée)", use_container_width=True)
 
             if st.button("📤 Lancer le traitement OCR"):
                 img_bytes = io.BytesIO()
@@ -203,7 +197,7 @@ if img:
                     else:
                         st.success("✅ Tous les champs détectés avec succès.")
                 else:
-                    st.warning("⚠️ Aucun texte détecté.")
+                    st.warning("⚠ Aucun texte détecté.")
                     st.session_state.results = {}
 
 # ✅ Enregistrement si données disponibles
