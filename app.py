@@ -145,9 +145,6 @@ if st.session_state.selection_mode:
         # Appliquer la rotation sélectionnée sur la zone extraite
         cropped_zone = cropped_zone.rotate(-rotation, expand=True)
 
-        # 🔧 Prétraitement + OCR
-        ...
-
     # 📐 Redimensionnement
     max_width = 360
     if img.width > max_width:
