@@ -9,6 +9,7 @@ st.title("🎨 Application de dessin sur image croppée")
 # 📂 Upload image
 uploaded_file = st.file_uploader("Choisis une image", type=["jpg", "png", "jpeg"])
 if uploaded_file:
+    img = img.rotate(-90, expand=True)
     img = Image.open(uploaded_file).convert("RGB")
     img_width, img_height = img.size
 
