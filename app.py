@@ -86,12 +86,15 @@ if source == "Téléverser un fichier":
     if uploaded:
         img = Image.open(uploaded).convert("RGB")
 
-        # 📐 Rognage proportionnel
+        # 📐 Rognage proportionnel ajusté
         width, height = img.size
-        left = int(width * 0.1)
-        right = int(width * 0.9)
-        top = int(height * 0.5)
-        bottom = int(height * 0.5)
+        
+        left = int(width * 0.05)       # décalé à gauche
+        right = int(width * 0.85)      # 80 % en largeur
+        
+        top = int(height * 0.3)        # on commence plus haut
+        bottom = int(height * 0.7)     # on termine plus bas
+        
         cropped_img = img.crop((left, top, right, bottom))
         
         img = cropped_img.copy()       # Image à afficher + dessiner
