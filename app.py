@@ -1,60 +1,46 @@
 import streamlit as st
 from streamlit_drawable_canvas import st_canvas
 from PIL import Image
+import numpy as np
 
-st.set_page_config(page_title="🖌️ Mon appli de dessin", layout="centered")
+st.set_page_config(page_title="✂️ Crop interactif", layout="centered")
+st.title("🖼️ Sélectionne une zone à rogner")
 
-st.title("🎨 Application de dessin sur image croppée")
-
-# 📂 Upload image
-uploaded_file = st.file_uploader("Choisis une image", type=["jpg", "png", "jpeg"])
+uploaded_file = st.file_uploader("📤 Téléverse une image", type=["jpg", "png", "jpeg"])
 if uploaded_file:
     img = Image.open(uploaded_file).convert("RGB")
-    img = img.rotate(-90, expand=True)
     img_width, img_height = img.size
+    st.image(img, caption="📸 Image originale", use_container_width=True)
 
-    st.subheader("✂️ Paramètres du crop")
-    x1 = st.slider("x1 (gauche)", 0, img_width, 0)
-    x2 = st.slider("x2 (droite)", x1 + 1, img_width, img_width)
-    y1 = st.slider("y1 (haut)", 0, img_height, 0)
-    y2 = st.slider("y2 (bas)", y1 + 1, img_height, img_height)
-
-    # ✂️ Crop image selon les sliders
-    cropped_img = img.crop((x1, y1, x2, y2)).convert("RGB")
-    canvas_width, canvas_height = cropped_img.size
-
-    st.subheader("🖼️ Aperçu croppé")
-    st.image(cropped_img, width=canvas_width)
-
-    st.subheader("🎨 Dessine sur l’image")
+    st.subheader("🎯 Dessine un rectangle de sélection")
     canvas_result = st_canvas(
-        fill_color="rgba(0, 0, 255, 0.3)",  # couleur du pinceau
-        stroke_width=4,
-        background_image=cropped_img,
+        fill_color="rgba(255, 0, 0, 0.3)",
+        stroke_width=2,
+        background_image=img,
         update_streamlit=True,
-        height=canvas_height,
-        width=canvas_width,
-        drawing_mode="freedraw",
-        key="canvas",
+        height=img_height,
+        width=img_width,
+        drawing_mode="rect",
+        key="canvas_crop",
     )
 
-    # 🧪 Retour sur les objets dessinés
     if canvas_result.json_data and canvas_result.json_data["objects"]:
-        st.write("✅ Objets dessinés :", canvas_result.json_data["objects"])
-    else:
-        st.write("😶 Aucun dessin pour le moment.")
+        obj = canvas_result.json_data["objects"][0]
+        left = int(obj["left"])
+        top = int(obj["top"])
+        width = int(obj["width"])
+        height = int(obj["height"])
+        right = left + width
+        bottom = top + height
 
-    # 📤 Option d'enregistrement
-    if canvas_result.image_data is not None:
-        st.subheader("📥 Enregistrer ton dessin")
-        from PIL import Image as PILImage
-        import numpy as np
+        cropped_img = img.crop((left, top, right, bottom)).convert("RGB")
+        st.subheader("🔎 Aperçu de l’image croppée")
+        st.image(cropped_img, caption="✂️ Image rognée")
 
-        result_img = PILImage.fromarray((canvas_result.image_data).astype(np.uint8))
-        st.image(result_img, caption="🖼️ Image finale", use_container_width=True)
-        if st.button("💾 Télécharger en PNG"):
-            result_img.save("dessin_exporté.png")
-            st.success("Dessin sauvegardé en `dessin_exporté.png` ✅")
+        # 📥 Télécharger
+        if st.button("💾 Télécharger le crop"):
+            cropped_img.save("image_crop.png")
+            st.success("✅ Image enregistrée sous `image_crop.png`")
 
 else:
-    st.info("📤 Téléverse une image pour commencer.")
+    st.info("📌 Attends que l’image soit téléversée pour dessiner.")
