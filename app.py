@@ -7,11 +7,11 @@ import re
 import gspread
 from google.oauth2.service_account import Credentials
 
-# 🆔 Récupération de l'ID_Panneau depuis l'URL
+# 🆔 Paramètres initiaux
 id_panneau = st.query_params.get("id_panneau", "")
 TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
 
-# États Streamlit
+# 🌟 États streamlit
 if "selection_mode" not in st.session_state:
     st.session_state.selection_mode = False
 if "sheet_saved" not in st.session_state:
@@ -26,7 +26,7 @@ st.title("📸 Rognage + Retouche + OCR 🔎")
 
 uploaded_file = st.file_uploader("Téléverse une image (max 200 MB)", type=["jpg", "png", "jpeg"])
 
-# 📄 Fonction extraction intelligente
+# 📄 Fonction d'extraction OCR intelligent
 def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
     aliases = {
         "voc": "Voc", "v_oc": "Voc",
@@ -60,7 +60,7 @@ def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
 
     return {key: result.get(key, "Non détecté") for key in expected_keys}
 
-# 📤 Envoi vers Google Sheet
+# 📤 Envoi vers Google Sheets
 def send_to_sheet(id_panneau, row_data, sheet_id, worksheet_name):
     scope = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = Credentials.from_service_account_info(st.secrets["gspread_auth"], scopes=scope)
@@ -70,11 +70,9 @@ def send_to_sheet(id_panneau, row_data, sheet_id, worksheet_name):
     sheet.append_row(full_row)
     return True
 
+# 📸 Traitement de l'image
 if uploaded_file:
-    quality = 90
-    api_key = "K81047805588957"
-    ocr_url = "https://api.ocr.space/parse/image"
-
+    st.subheader("🖼️ Préparation de l'image")
     original_img = Image.open(uploaded_file).convert("RGB")
     original_img = original_img.rotate(-90, expand=True)
 
@@ -85,13 +83,13 @@ if uploaded_file:
     bottom = int(h * 0.7)
     img = original_img.crop((left, top, right, bottom))
 
-    st.image(img, caption="🖼️ Image affichée (optimisée)", use_container_width=True)
-
     canvas_width = 300
     canvas_height = int(canvas_width * img.height / img.width)
-    st.subheader("🟦 Sélectionne une zone")
 
-    # ➕ Ajout dynamique de rectangles
+    st.image(img, caption="🖼️ Image optimisée", use_container_width=True)
+    st.subheader("🟦 Zone de sélection")
+
+    # ➕ Ajout d'un bouton pour créer un rectangle
     if st.button("➕ Ajouter un rectangle"):
         new_rect = {
             "type": "rect",
@@ -104,19 +102,22 @@ if uploaded_file:
         }
         st.session_state.rectangles.append(new_rect)
 
-    # 🖼️ Canevas modifiable
+    # ✅ Contrôle des rectangles valides
+    valid_rects = [r for r in st.session_state.rectangles if isinstance(r, dict)]
+
     canvas_result = st_canvas(
         background_image=img,
         height=canvas_height,
         width=canvas_width,
-        initial_drawing=st.session_state.rectangles,
+        initial_drawing=valid_rects,
         drawing_mode="transform",
         stroke_width=2,
         update_streamlit=True,
         key="canvas_crop"
     )
 
-    if canvas_result.json_data and canvas_result.json_data["objects"]:
+    # 🔍 Lecture du premier rectangle sélectionné
+    if canvas_result.json_data and canvas_result.json_data.get("objects"):
         obj = canvas_result.json_data["objects"][0]
         scale_x = img.width / canvas_width
         scale_y = img.height / canvas_height
@@ -134,11 +135,14 @@ if uploaded_file:
         st.subheader("🔍 Image rognée")
         st.image(cropped, caption="📐 Zone sélectionnée")
 
+        # 🔬 OCR
         enhanced = ImageEnhance.Contrast(cropped).enhance(1.2)
         img_bytes = io.BytesIO()
         enhanced.save(img_bytes, format="JPEG")
         img_bytes.seek(0)
 
+        api_key = "K81047805588957"
+        ocr_url = "https://api.ocr.space/parse/image"
         response = requests.post(
             ocr_url,
             files={"file": ("image.jpg", img_bytes, "image/jpeg")},
@@ -152,32 +156,33 @@ if uploaded_file:
             st.text(ocr_text)
 
             extracted = extract_ordered_fields(ocr_text)
-            st.subheader("📋 Champs extraits OCR")
+            st.subheader("📋 Résultats extraits")
             for key in TARGET_KEYS:
-                val = extracted.get(key, "Non détecté")
-                st.text(f"{key} : {val}")
+                st.text(f"{key} : {extracted.get(key, 'Non détecté')}")
 
+            # 📤 Envoi vers Google Sheet
             if st.button("📤 Enregistrer dans Google Sheet"):
                 try:
                     sheet_id = "1yhIVYOqibFnhKKCnbhw8v0f4n1MbfY_4uZhSotK44gc"
                     worksheet_name = "Tests_Panneaux"
                     row = [extracted.get(k, "Non détecté") for k in TARGET_KEYS]
                     send_to_sheet(id_panneau, row, sheet_id, worksheet_name)
-                    st.success("✅ Données bien envoyées dans Google Sheet.")
+                    st.success("✅ Données bien envoyées.")
                 except Exception as e:
                     st.error(f"❌ Erreur : {e}")
         else:
             st.error(f"❌ Erreur OCR.space ({response.status_code}) : {response.text}")
 
+        # 📥 Téléchargement de l'image finale
         final_buffer = io.BytesIO()
-        enhanced.save(final_buffer, format="JPEG", quality=quality, optimize=True)
+        enhanced.save(final_buffer, format="JPEG", quality=90, optimize=True)
         st.download_button(
-            label=f"📥 Télécharger (qualité {quality}, taille ~{round(final_buffer.tell() / 1024 / 1024, 2)} MB)",
+            label=f"📥 Télécharger l’image finale",
             data=final_buffer.getvalue(),
             file_name="image_rognee.jpg",
             mime="image/jpeg"
         )
     else:
-        st.info("👆 Dessine ou ajoute un rectangle pour sélectionner une zone.")
+        st.info("👆 Ajoute ou dessine une zone pour lancer le traitement.")
 else:
-    st.info("📤 Choisis une image à traiter.")
+    st.info("📤 Choisis une image à analyser.")
