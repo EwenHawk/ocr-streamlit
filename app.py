@@ -203,8 +203,7 @@ if img:
                     else:
                         st.success("✅ Tous les champs détectés avec succès.")
                 else:
-                    st.warning("⚠️ Aucun
- texte détecté.")
+                    st.warning("⚠️ Aucun texte détecté.")
                     st.session_state.results = {}
 
 # ✅ Enregistrement si données disponibles
