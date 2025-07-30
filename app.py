@@ -24,18 +24,19 @@ def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
         "vpm": "Vpm", "v_pm": "Vpm", "vpm.": "Vpm",
         "ipm": "Ipm", "i_pm": "Ipm", "ipm.": "Ipm", "lpm": "Ipm"
     }
-    lines = [line.strip().lower() for line in text.splitlines() if line.strip()]
+
+    def normalize_key(raw_key):
+        return re.sub(r'[^a-zA-Z]', '', raw_key).lower()
+
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
     keys_found, values_found = [], []
 
     for line in lines:
-        if line.endswith(":"):
-            key = line.rstrip(":").strip()
-            if key in aliases:
-                keys_found.append(aliases[key])
-        else:
-            match = re.match(r"^\d+[.,]?\d*\s*[a-z%ΩVWAm]*$", line, re.IGNORECASE)
-            if match:
-                values_found.append(match.group(0).strip())
+        cleaned_key = normalize_key(line)
+        if cleaned_key in aliases:
+            keys_found.append(aliases[cleaned_key])
+        elif re.match(r"^\d+[.,]?\d*\s*[a-z%ΩVWAm]*$", line, re.IGNORECASE):
+            values_found.append(line.strip())
 
     result = {}
     for i in range(min(len(keys_found), len(values_found))):
