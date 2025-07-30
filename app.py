@@ -22,7 +22,6 @@ if uploaded_file:
     bottom = int(h * 0.7)
     img = img.crop((left, top, right, bottom))
     st.image(img, caption="🖼️ Image affichée avec rotation", use_container_width=True)
-    canvas_height, canvas_width = img.size
 
     # 🟦 Canvas avec mode rectangle
     st.subheader("🟦 Dessine un cadre de sélection")
@@ -42,7 +41,7 @@ if uploaded_file:
         obj = canvas_result.json_data["objects"][0]
         x, y = int(obj["left"]), int(obj["top"])
         w, h = int(obj["width"]), int(obj["height"])
-        cropped = compressed_img.crop((x, y, x + w, y + h)).convert("RGB")
+        cropped = img.crop((x, y, x + w, y + h)).convert("RGB")
 
         st.subheader("🔍 Résultat rogné")
         st.image(cropped, caption="📐 Image rognée et compressée")
