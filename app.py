@@ -22,6 +22,7 @@ if uploaded_file:
     top = int(h * 0.3)
     bottom = int(h * 0.7)
     img = img.crop((left, top, right, bottom))
+    height, width = img.size
 
     # 🟦 Canvas avec mode rectangle
     st.subheader("🟦 Dessine un cadre de sélection")
