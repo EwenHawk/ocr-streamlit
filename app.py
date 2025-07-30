@@ -90,6 +90,7 @@ if uploaded_file:
     st.subheader("🟦 Zone de sélection")
 
     # ➕ Ajouter un rectangle
+    # Ajout du rectangle dans la session
     if st.button("➕ Ajouter un rectangle"):
         new_rect = {
             "type": "rect",
@@ -101,7 +102,21 @@ if uploaded_file:
             "strokeStyle": "blue"
         }
         st.session_state.rectangles.append(new_rect)
-        st.experimental_rerun()  # 🔁 Force le refresh
+    
+    # Contrôle des rectangles valides
+    valid_rects = [r for r in st.session_state.rectangles if isinstance(r, dict)]
+    
+    # Affichage du canevas
+    canvas_result = st_canvas(
+        background_image=img,
+        height=canvas_height,
+        width=canvas_width,
+        initial_drawing=valid_rects,
+        drawing_mode="transform",
+        stroke_width=2,
+        update_streamlit=True,
+        key="canvas_crop"
+    )
 
 
     # ✅ Contrôle des rectangles valides
