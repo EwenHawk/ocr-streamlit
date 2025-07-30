@@ -80,7 +80,7 @@ if uploaded_file:
         response = requests.post(
             ocr_url,
             files={"file": ("image.jpg", img_bytes, "image/jpeg")},
-            data={"apikey": api_key, "language": "eng"}
+            data={"apikey": api_key, "language": "eng", "OCREngine": 2}
         )
         
         # 📄 Résultat
