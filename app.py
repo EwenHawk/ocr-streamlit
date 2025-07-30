@@ -91,13 +91,31 @@ if uploaded_file:
     canvas_width = 300
     canvas_height = int(canvas_width * img.height / img.width)
     st.subheader("🟦 Sélectionne une zone")
+    # Initialiser les rectangles si nécessaire
+    if "rectangles" not in st.session_state:
+        st.session_state.rectangles = []
+    
+    # Bouton pour ajouter un nouveau rectangle
+    if st.button("➕ Ajouter un rectangle"):
+        new_rect = {
+            "type": "rect",
+            "left": 40,
+            "top": 40,
+            "width": 100,
+            "height": 60,
+            "fillStyle": "rgba(0, 0, 255, 0.3)",
+            "strokeStyle": "blue"
+        }
+        st.session_state.rectangles.append(new_rect)
+    
+    # Canevas avec rectangles modifiables
     canvas_result = st_canvas(
         background_image=img,
         height=canvas_height,
         width=canvas_width,
-        drawing_mode="rect",
+        initial_drawing=st.session_state.rectangles,
+        drawing_mode="transform",
         stroke_width=2,
-        stroke_color="blue",
         update_streamlit=True,
         key="canvas_crop"
     )
