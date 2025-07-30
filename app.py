@@ -109,9 +109,18 @@ if uploaded_file:
         
             # 🔎 Méthode 2 : association par position
             def extract_ordered_by_position(text, expected_keys):
+                # Découpe le texte brut
                 lines = [line.strip() for line in text.splitlines() if line.strip()]
+                
+                # 🧹 On garde uniquement les lignes qui ressemblent à des valeurs
+                values_only = [
+                    line for line in lines
+                    if not line.endswith(":") and any(unit in line for unit in ["V", "A", "W"])
+                ]
+                
+                # Association propre
                 fields = {}
-                for key, value in zip(expected_keys, lines[len(expected_keys):]):
+                for key, value in zip(expected_keys, values_only):
                     fields[key] = value
                 return fields
         
