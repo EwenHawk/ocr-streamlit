@@ -22,7 +22,7 @@ def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
         "isc": "Isc", "lsc": "Isc", "i_sc": "Isc",
         "pmax": "Pmax", "p_max": "Pmax", "pmax.": "Pmax",
         "vpm": "Vpm", "v_pm": "Vpm", "vpm.": "Vpm",
-        "ipm": "Ipm", "i_pm": "Ipm", "ipm.": "Ipm", "lpm": "Ipm","Iom" : "Ipm", "iom": "Ipm",
+        "ipm": "Ipm", "i_pm": "Ipm", "ipm.": "Ipm", "lpm": "Ipm","Iom" : "Ipm", "iom": "Ipm", "lom" : "Ipm", "Lom": "Ipm",
     }
 
     def normalize_key(raw_key):
