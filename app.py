@@ -21,6 +21,9 @@ if uploaded_file:
     top = int(h * 0.3)
     bottom = int(h * 0.7)
     img = img.crop((left, top, right, bottom))
+    st.image(img, caption="📸 Image originale", use_container_width=True)
+
+
     
 
     st.subheader("🎯 Dessine un rectangle de sélection")
