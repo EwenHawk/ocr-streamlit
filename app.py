@@ -84,29 +84,69 @@ else:
 source = st.radio("📷 Source de l’image :", ["Téléverser un fichier", "Prendre une photo"])
 img = None
 
-if source == "Téléverser un fichier":
-    uploaded_file = st.file_uploader("📁 Importer un fichier", type=["jpg", "jpeg", "png"])
-    if uploaded_file:
-        img = Image.open(uploaded_file)
-        img_original = img.copy()  # 🔒 Garde l'image originale
-elif source == "Prendre une photo":
-    photo = st.camera_input("📸 Capture via caméra")
-    if photo:
-        img = Image.open(photo)
-        img_original = img.copy()
+# ... après import de l'image (upload ou caméra)
+if uploaded_file:
+    img = Image.open(uploaded_file)
+    img_original = img.copy()
+elif photo:
+    img = Image.open(photo)
+    img_original = img.copy()
 
-# 🖼️ Traitement
-if img:
-    rotation = st.selectbox("🔁 Rotation", [0, 90, 180, 270], index=0)
-    img = img.rotate(-rotation, expand=True)
+# 🎛️ Rotation (mais sans l'appliquer immédiatement)
+rotation = st.selectbox("🔁 Rotation", [0, 90, 180, 270], index=0)
 
-    # ✂️ Rognage initial
-    w, h = img.size
-    left = int(w * 1/12)
-    right = int(w * 11/12)
-    top = int(h * 1/5)
-    bottom = int(h * 4/5)
-    img = img.crop((left, top, right, bottom))
+# ✂️ Rognage adouci (~1/3 de moins)
+w, h = img.size
+left = int(w * 1/12)
+right = int(w * 11/12)
+top = int(h * 1/5)
+bottom = int(h * 4/5)
+cropped_preview = img.crop((left, top, right, bottom))
+
+# 🖼️ Image affichée pivotée (mais image source conservée)
+rotated_preview = cropped_preview.rotate(-rotation, expand=True)
+canvas_width, canvas_height = rotated_preview.size
+
+# 📐 Redimensionnement pour affichage
+max_width = 360
+if rotated_preview.width > max_width:
+    ratio = max_width / rotated_preview.width
+    rotated_preview = rotated_preview.resize((max_width, int(rotated_preview.height * ratio)), Image.Resampling.LANCZOS)
+
+st.image(rotated_preview, caption="🖼️ Image rognée (rotation appliquée)", use_container_width=True)
+
+# 🎨 Canvas avec rotation affichée
+if st.session_state.selection_mode:
+    initial_rect = {...}
+    canvas_result = st_canvas(
+        background_image=rotated_preview,
+        ...
+        height=rotated_preview.height,
+        width=rotated_preview.width,
+        key="canvas"
+    )
+
+    # 🔁 Coordonnées recalculées avec ratios
+    if canvas_result.json_data and canvas_result.json_data["objects"]:
+        rect = canvas_result.json_data["objects"][-1]
+        x, y = rect["left"], rect["top"]
+        w, h = rect["width"], rect["height"]
+
+        scale_x = img_original.width / canvas_width
+        scale_y = img_original.height / canvas_height
+
+        x_orig = int(x * scale_x)
+        y_orig = int(y * scale_y)
+        w_orig = int(w * scale_x)
+        h_orig = int(h * scale_y)
+
+        cropped_zone = img_original.crop((x_orig, y_orig, x_orig + w_orig, y_orig + h_orig))
+
+        # Appliquer la rotation sélectionnée sur la zone extraite
+        cropped_zone = cropped_zone.rotate(-rotation, expand=True)
+
+        # 🔧 Prétraitement + OCR
+        ...
 
     # 📐 Redimensionnement
     max_width = 360
