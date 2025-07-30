@@ -14,7 +14,7 @@ from google.oauth2.service_account import Credentials
 
 # 1) Paramètres généraux
 TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
-query_params = st.experimental_get_query_params()
+query_params = st.query_params()
 id_panneau = query_params.get("id_panneau", [""])[0]
 
 st.set_page_config(page_title="✂️ Rognage + OCR", layout="centered")
