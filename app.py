@@ -85,20 +85,20 @@ if source == "Téléverser un fichier":
     uploaded = st.file_uploader("📁 Importer une image", type=["jpg", "jpeg", "png"])
     if uploaded:
         img = Image.open(uploaded).convert("RGB")
-
-        # 📐 Rognage proportionnel ajusté
-        width, height = img.size
-        
-        left = int(width * 0.05)       # décalé à gauche
-        right = int(width * 0.85)      # 80 % en largeur
-        
-        top = int(height * 0.3)        # on commence plus haut
-        bottom = int(height * 0.7)     # on termine plus bas
-        
-        cropped_img = img.crop((left, top, right, bottom))
-        
-        img = cropped_img.copy()       # Image à afficher + dessiner
-        img_original = cropped_img.copy()  # Image originale pour OCR
+    
+        # 🔄 Rotation automatique à 90°
+        rotated_img = img.rotate(-90, expand=True)
+    
+        # 📐 Rognage (si souhaité — sinon à retirer)
+        width, height = rotated_img.size
+        left = int(width * 0.05)
+        right = int(width * 0.85)
+        top = int(height * 0.3)
+        bottom = int(height * 0.7)
+        cropped_img = rotated_img.crop((left, top, right, bottom))
+    
+        img = cropped_img.copy()       # Pour affichage + dessin
+        img_original = cropped_img.copy()  # Pour OCR + traitement
 elif source == "Prendre une photo":
     photo = st.camera_input("📸 Prendre une photo")
     if photo:
