@@ -7,11 +7,10 @@ import gspread
 from google.oauth2.service_account import Credentials
 from streamlit_drawable_canvas import st_canvas
 
-# 🆔 Paramètre URL
+# 🆔 ID depuis URL
 id_panneau = st.query_params.get("id_panneau", "")
 TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
 
-# 🎛️ État Streamlit
 if "sheet_saved" not in st.session_state:
     st.session_state.sheet_saved = False
 if "results" not in st.session_state:
@@ -29,7 +28,7 @@ def ocr_space_api(img_bytes, api_key="helloworld"):
     except Exception as e:
         return {"error": str(e)}
 
-# 📝 Extraction des champs
+# 📄 Extraction champs
 def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
     aliases = {
         "voc": "Voc", "v_oc": "Voc",
@@ -59,7 +58,7 @@ def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
             result[keys_found[i]] = raw
     return {key: result.get(key, "Non détecté") for key in expected_keys}
 
-# 📡 Google Sheet
+# 📎 Envoi vers Google Sheet
 def send_to_sheet(id_panneau, row_data, sheet_id, worksheet_name):
     scope = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = Credentials.from_service_account_info(st.secrets["gspread_auth"], scopes=scope)
@@ -68,17 +67,16 @@ def send_to_sheet(id_panneau, row_data, sheet_id, worksheet_name):
     sheet.append_row([id_panneau] + row_data)
     return True
 
-# 🔧 Interface
+# 🎨 Interface
 st.set_page_config(page_title="OCR ToolJet", page_icon="📤", layout="centered")
-st.title("🖍️ OCR avec sélection à la souris")
+st.title("🖍️ OCR technique avec sélection dessinée")
 
 if id_panneau:
     st.info(f"🆔 ID_Panneau : `{id_panneau}`")
-else:
-    st.warning("⚠️ Pas d'ID dans l’URL")
 
-source = st.radio("📷 Source de l’image :", ["Téléverser un fichier", "Prendre une photo"])
+source = st.radio("📷 Source image :", ["Téléverser un fichier", "Prendre une photo"])
 img = None
+img_original = None
 
 if source == "Téléverser un fichier":
     uploaded = st.file_uploader("📁 Importer une image", type=["jpg", "jpeg", "png"])
@@ -86,33 +84,32 @@ if source == "Téléverser un fichier":
         img = Image.open(uploaded)
         img_original = img.copy()
 elif source == "Prendre une photo":
-    photo = st.camera_input("📸 Prendre une photo")
+    photo = st.camera_input("📸 Capture photo")
     if photo:
         img = Image.open(photo)
         img_original = img.copy()
 
 if img:
     rotation = st.selectbox("🔁 Rotation", [0, 90, 180, 270], index=0)
-    preview_img = img.rotate(-rotation, expand=True)
 
-    max_width = 360
-    if preview_img.width > max_width:
-        ratio = max_width / preview_img.width
-        preview_img = preview_img.resize((max_width, int(preview_img.height * ratio)), Image.Resampling.LANCZOS)
+    # 🖼️ Appliquer rotation pour affichage (mais pas sur img_original)
+    rotated = img.rotate(-rotation, expand=True)
 
-    canvas_w, canvas_h = preview_img.size
-    st.image(preview_img, caption="🖼️ Image affichée avec rotation", use_container_width=True)
+    # 📐 Définir dimensions canvas
+    canvas_width, canvas_height = rotated.size
 
-    st.subheader("✏️ Dessinez une zone à analyser")
+    st.image(rotated, caption="🖼️ Image affichée (rotation appliquée)", width=canvas_width)
+
+    # ✏️ Zone dessinée par utilisateur
     canvas = st_canvas(
-        background_image=preview_img,
+        background_image=rotated,
+        height=canvas_height,
+        width=canvas_width,
         drawing_mode="freedraw",
         stroke_color="red",
         stroke_width=2,
         update_streamlit=True,
-        height=canvas_h,
-        width=canvas_w,
-        key="freedraw-canvas"
+        key="canvas-free"
     )
 
     if canvas.json_data and canvas.json_data["objects"]:
@@ -120,40 +117,38 @@ if img:
         x, y = obj["left"], obj["top"]
         w, h = obj["width"], obj["height"]
 
-        # 🧮 Rapport vers image originale
-        scale_x = img_original.width / canvas_w
-        scale_y = img_original.height / canvas_h
-
+        # 🔁 Convertir vers image originale
+        scale_x = img_original.width / canvas_width
+        scale_y = img_original.height / canvas_height
         x_orig = int(x * scale_x)
         y_orig = int(y * scale_y)
         w_orig = int(w * scale_x)
         h_orig = int(h * scale_y)
 
-        zone = img_original.crop((x_orig, y_orig, x_orig + w_orig, y_orig + h_orig))
-        zone = zone.rotate(-rotation, expand=True)
+        cropped = img_original.crop((x_orig, y_orig, x_orig + w_orig, y_orig + h_orig))
+        cropped = cropped.rotate(-rotation, expand=True)
 
-        # 📦 Prétraitement
-        gray = zone.convert("L")
+        # 🧼 Prétraitement doux
+        gray = cropped.convert("L")
         bright = ImageEnhance.Brightness(gray).enhance(1.2)
         white_soft = bright.point(lambda p: 255 if p > 230 else p)
         final = ImageEnhance.Contrast(white_soft).enhance(1.1)
         cleaned = Image.new("RGB", final.size, (255, 255, 255))
         cleaned.paste(final.convert("RGB"))
-        zone = cleaned
+        cropped = cleaned
 
-        st.image(zone, caption="📌 Zone dessinée (traitée)", use_container_width=True)
+        st.image(cropped, caption="📌 Zone sélectionnée", use_container_width=True)
 
         if st.button("📤 Lancer OCR"):
             buffer = io.BytesIO()
-            zone.save(buffer, format="JPEG", quality=100)
+            cropped.save(buffer, format="JPEG", quality=100)
             buffer.seek(0)
-
-            ocr_result = ocr_space_api(buffer)
-            parsed = ocr_result.get("ParsedResults", [])
+            result = ocr_space_api(buffer)
+            parsed = result.get("ParsedResults", [])
             if parsed and "ParsedText" in parsed[0]:
                 raw = parsed[0]["ParsedText"]
-                st.subheader("📝 Texte OCR brut")
-                st.code(raw[:3000], language="text")
+                st.subheader("📄 Texte OCR brut")
+                st.code(raw[:3000])
                 st.session_state.results = extract_ordered_fields(raw)
 
                 st.subheader("📊 Champs extraits")
@@ -171,12 +166,12 @@ if st.session_state.results:
     if st.button("✅ Envoyer vers Google Sheet"):
         try:
             sheet_id = "1yhIVYOqibFnhKKCnbhw8v0f4n1MbfY_4uZhSotK44gc"
-            sheet_name = "Tests_Panneaux"
+            worksheet_name = "Tests_Panneaux"
             row = [st.session_state.results.get(k, "Non détecté") for k in TARGET_KEYS]
-            send_to_sheet(id_panneau, row, sheet_id, sheet_name)
+            send_to_sheet(id_panneau, row, sheet_id, worksheet_name)
             st.session_state.sheet_saved = True
         except Exception as e:
-            st.error(f"❌ Enregistrement échoué : {e}")
+            st.error(f"❌ Erreur : {e}")
 
 if st.session_state.sheet_saved:
-    st.success("📡 Données envoyées avec succès vers Google Sheet")
+    st.success("📡 Données enregistrées dans Google Sheet")
