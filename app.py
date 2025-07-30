@@ -7,194 +7,183 @@ import re
 import gspread
 from google.oauth2.service_account import Credentials
 
-# 🆔 Récupération de l'ID_Panneau depuis l'URL
-id_panneau = st.query_params.get("id_panneau", [""])[0]
-TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
-
-# États Streamlit
-for key, default in [
-    ("selection_mode", False),
-    ("sheet_saved", False),
-    ("results", {}),
-]:
-    if key not in st.session_state:
-        st.session_state[key] = default
-
+# 1) Configuration de la page et constantes
 st.set_page_config(page_title="✂️ Rognage + OCR", layout="centered")
 st.title("📸 Rognage + Retouche + OCR 🔎")
 
-uploaded_file = st.file_uploader("Téléverse une image (max 200 MB)", type=["jpg", "png", "jpeg"])
+TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
 
-# Désactive le scroll sur le canvas pour améliorer le tactile
+# 2) Patch CSS + JS pour activer le dessin rect sur tactile
 st.markdown("""
 <style>
   canvas {
     touch-action: none;
   }
 </style>
+<script>
+// On cherche tous les <canvas> et on y greffe la conversion touch→mouse
+function patchCanvas() {
+  const canvases = document.querySelectorAll('canvas');
+  canvases.forEach(canvas => {
+    if (canvas.dataset.patched) return;
+    ['touchstart','touchmove','touchend'].forEach(evtType => {
+      canvas.addEventListener(evtType, function(e) {
+        const t = e.touches[0];
+        const map = { touchstart:'mousedown', touchmove:'mousemove', touchend:'mouseup' };
+        const me = new MouseEvent(map[evtType], {
+          clientX: t.clientX,
+          clientY: t.clientY,
+          bubbles: true,
+          cancelable: true,
+          view: window
+        });
+        canvas.dispatchEvent(me);
+        e.preventDefault();
+      });
+    });
+    canvas.dataset.patched = true;
+  });
+}
+// On réessaie fréquemment (cover reloads de Streamlit)
+setInterval(patchCanvas, 500);
+</script>
 """, unsafe_allow_html=True)
 
-# 📄 Fonction extraction intelligente
-def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
+# 3) Uploader + lecture
+uploaded = st.file_uploader("Téléverse une image (jpg, png, jpeg)", type=["jpg","png","jpeg"])
+if not uploaded:
+    st.info("📤 Choisis une image pour commencer")
+    st.stop()
+
+# 4) Ouvrir + pivoter + recadrer la zone générale
+orig = Image.open(uploaded).convert("RGB")
+orig = orig.rotate(-90, expand=True)
+w, h = orig.size
+crop_box_general = (
+    int(w*0.05), int(h*0.3),
+    int(w*0.85), int(h*0.7)
+)
+preview = orig.crop(crop_box_general)
+st.subheader("🖼️ Aperçu recadré")
+st.image(preview, use_container_width=True)
+
+# 5) Affichage du canvas en mode RECT
+st.subheader("🟦 Trace un rectangle (début→fin) pour sélectionner")
+canvas_w = st.sidebar.slider("Largeur canvas", 200, 800, 300)
+canvas_h = int(canvas_w * preview.height / preview.width)
+
+canvas_data = st_canvas(
+    background_image=preview,
+    width=canvas_w,
+    height=canvas_h,
+    drawing_mode="rect",      # ← forçage en mode rectangle
+    stroke_width=2,
+    stroke_color="blue",
+    key="select_rect",
+    update_streamlit=True,
+)
+
+# 6) Si un objet a été dessiné, on récupère le rectangle
+if not (canvas_data.json_data and canvas_data.json_data["objects"]):
+    st.info("👆 Trace un rectangle pour continuer")
+    st.stop()
+
+obj = canvas_data.json_data["objects"][0]
+scale_x = preview.width  / canvas_w
+scale_y = preview.height / canvas_h
+
+x0 = int(obj["left" ] * scale_x)
+y0 = int(obj["top"  ] * scale_y)
+w0 = int(obj["width"] * scale_x)
+h0 = int(obj["height"]* scale_y)
+
+# 7) Recadrage définitif sur l'image d'origine
+final_box = (
+    crop_box_general[0] + x0,
+    crop_box_general[1] + y0,
+    crop_box_general[0] + x0 + w0,
+    crop_box_general[1] + y0 + h0
+)
+crop = orig.crop(final_box)
+st.subheader("🔍 Zone sélectionnée")
+st.image(crop, use_container_width=True)
+
+# 8) Contraste + OCR
+enh = ImageEnhance.Contrast(crop).enhance(1.2)
+buf = io.BytesIO()
+enh.save(buf, format="JPEG")
+buf.seek(0)
+
+st.subheader("🔍 Résultat OCR")
+resp = requests.post(
+    "https://api.ocr.space/parse/image",
+    files={"file": ("img.jpg", buf, "image/jpeg")},
+    data={"apikey": "K81047805588957", "language": "eng", "OCREngine": 2}
+)
+
+if resp.status_code != 200:
+    st.error(f"Erreur OCR.space {resp.status_code}")
+    st.stop()
+
+ocr_text = resp.json()["ParsedResults"][0]["ParsedText"]
+st.text_area("Texte brut", ocr_text, height=150)
+
+# 9) Extraction des champs
+def extract_fields(text):
     aliases = {
-        "voc": "Voc", "v_oc": "Voc",
-        "isc": "Isc", "lsc": "Isc", "i_sc": "Isc", "isci": "Isc", "Isci": "Isc",
-        "pmax": "Pmax", "p_max": "Pmax", "pmax.": "Pmax",
-        "vpm": "Vpm", "v_pm": "Vpm", "vpm.": "Vpm",
-        "ipm": "Ipm", "i_pm": "Ipm", "ipm.": "Ipm", "lpm": "Ipm",
-        "Iom": "Ipm", "iom": "Ipm", "lom": "Ipm", "Lom": "Ipm",
+      "voc":"Voc","v_oc":"Voc",
+      "isc":"Isc","lsc":"Isc","i_sc":"Isc",
+      "pmax":"Pmax","p_max":"Pmax",
+      "vpm":"Vpm","v_pm":"Vpm",
+      "ipm":"Ipm","i_pm":"Ipm"
     }
-
-    def normalize_key(raw_key):
-        return re.sub(r'[^a-zA-Z]', '', raw_key).lower()
-
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
-    keys_found, values_found = [], []
-
+    def norm(k): return re.sub(r'[^a-zA-Z]','',k).lower()
+    lines = [l for l in text.splitlines() if l.strip()]
+    found_k, found_v = [], []
     for line in lines:
-        nk = normalize_key(line)
+        nk = norm(line)
         if nk in aliases:
-            keys_found.append(aliases[nk])
-        elif re.match(r"^\d+[.,]?\d*\s*[a-z%ΩVWAm]*$", line, re.IGNORECASE):
-            values_found.append(line.strip())
+            found_k.append(aliases[nk])
+        elif re.match(r"^\\d+[.,]?\\d*", line):
+            found_v.append(line.strip())
+    res = {}
+    for i in range(min(len(found_k), len(found_v))):
+        v = found_v[i]
+        num = re.sub(r"[^\d.,-]","",v).replace(",",".")
+        try: res[found_k[i]] = str(round(float(num),1))
+        except: res[found_k[i]] = v
+    return {k: res.get(k, "Non détecté") for k in TARGET_KEYS}
 
-    result = {}
-    for i in range(min(len(keys_found), len(values_found))):
-        raw = values_found[i]
-        clean = re.sub(r"[^\d.,\-]", "", raw).replace(",", ".")
-        try:
-            result[keys_found[i]] = str(round(float(clean), 1))
-        except:
-            result[keys_found[i]] = raw
+fields = extract_fields(ocr_text)
+st.subheader("📋 Valeurs extraites")
+for k in TARGET_KEYS:
+    st.write(f"{k} : {fields[k]}")
 
-    return {k: result.get(k, "Non détecté") for k in expected_keys}
-
-# 📤 Fonction envoi vers Google Sheet
-def send_to_sheet(id_p, row_data, sheet_id, worksheet_name):
-    scope = ["https://www.googleapis.com/auth/spreadsheets"]
-    creds = Credentials.from_service_account_info(
-        st.secrets["gspread_auth"], scopes=scope
-    )
+# 10) Envoi vers Google Sheets
+def send_sheet(id_panel, row, sheet_key, ws):
+    creds = Credentials.from_service_account_info(st.secrets["gspread_auth"],
+                        scopes=["https://www.googleapis.com/auth/spreadsheets"])
     client = gspread.authorize(creds)
-    ws = client.open_by_key(sheet_id).worksheet(worksheet_name)
-    ws.append_row([id_p] + row_data)
-    return True
+    client.open_by_key(sheet_key).worksheet(ws).append_row([id_panel] + row)
 
-if uploaded_file:
-    # Préparation
-    original_img = Image.open(uploaded_file).convert("RGB")
-    original_img = original_img.rotate(-90, expand=True)
-
-    w, h = original_img.size
-    left, right = int(w * 0.05), int(w * 0.85)
-    top, bottom = int(h * 0.3), int(h * 0.7)
-    img = original_img.crop((left, top, right, bottom))
-
-    st.subheader("🖼️ Image optimisée")
-    st.image(img, use_container_width=True)
-
-    # Choix dynamique du mode et de la taille du canvas
-    st.sidebar.subheader("🔧 Options de sélection")
-    canvas_width = st.sidebar.slider("Largeur du canvas", 200, 800, 300)
-    drawing_mode = st.sidebar.radio(
-        "Mode de dessin (Freehand recommandé sur mobile)",
-        ("rect", "freedraw"),
-        index=1
-    )
-    canvas_height = int(canvas_width * img.height / img.width)
-
-    st.subheader("🟦 Sélectionne une zone")
-    canvas_result = st_canvas(
-        background_image=img,
-        height=canvas_height,
-        width=canvas_width,
-        drawing_mode=drawing_mode,
-        stroke_width=2,
-        stroke_color="blue",
-        update_streamlit=True,
-        key="canvas_crop"
-    )
-
-    # Traitement de la sélection
-    if canvas_result.json_data and canvas_result.json_data["objects"]:
-        obj = canvas_result.json_data["objects"][0]
-        scale_x = img.width / canvas_width
-        scale_y = img.height / canvas_height
-
-        if drawing_mode == "rect":
-            x = int(obj["left"] * scale_x)
-            y = int(obj["top"] * scale_y)
-            w_sel = int(obj["width"] * scale_x)
-            h_sel = int(obj["height"] * scale_y)
-        else:  # freedraw → on en déduit la bounding-box
-            path = obj.get("path", [])
-            xs = [seg[1] for seg in path]
-            ys = [seg[2] for seg in path]
-            x0, y0 = min(xs), min(ys)
-            x1, y1 = max(xs), max(ys)
-            x = int(x0 * scale_x)
-            y = int(y0 * scale_y)
-            w_sel = int((x1 - x0) * scale_x)
-            h_sel = int((y1 - y0) * scale_y)
-
-        crop_box = (
-            left + x,
-            top + y,
-            left + x + w_sel,
-            top + y + h_sel
+if st.button("📤 Envoyer dans Google Sheet"):
+    try:
+        send_sheet(
+            st.experimental_get_query_params().get("id_panneau", [""])[0],
+            [fields[k] for k in TARGET_KEYS],
+            "1yhIVYOqibFnhKKCnbhw8v0f4n1MbfY_4uZhSotK44gc",
+            "Tests_Panneaux"
         )
-        cropped = original_img.crop(crop_box).convert("RGB")
+        st.success("✅ Enregistré !")
+    except Exception as e:
+        st.error(f"❌ {e}")
 
-        st.subheader("🔍 Image rognée")
-        st.image(cropped, caption="📐 Zone sélectionnée")
-
-        # Contraste + OCR
-        enhanced = ImageEnhance.Contrast(cropped).enhance(1.2)
-        buf = io.BytesIO()
-        enhanced.save(buf, format="JPEG")
-        buf.seek(0)
-
-        ocr_url = "https://api.ocr.space/parse/image"
-        api_key = "K81047805588957"
-        resp = requests.post(
-            ocr_url,
-            files={"file": ("image.jpg", buf, "image/jpeg")},
-            data={"apikey": api_key, "language": "eng", "OCREngine": 2}
-        )
-
-        if resp.status_code == 200:
-            ocr_text = resp.json()["ParsedResults"][0]["ParsedText"]
-            st.subheader("🔍 Texte OCR brut")
-            st.text(ocr_text)
-
-            extracted = extract_ordered_fields(ocr_text)
-            st.subheader("📋 Champs extraits")
-            for k in TARGET_KEYS:
-                st.text(f"{k} : {extracted.get(k)}")
-
-            if st.button("📤 Enregistrer dans Google Sheet"):
-                try:
-                    sheet_id = "1yhIVYOqibFnhKKCnbhw8v0f4n1MbfY_4uZhSotK44gc"
-                    ws_name = "Tests_Panneaux"
-                    row = [extracted.get(k) for k in TARGET_KEYS]
-                    send_to_sheet(id_panneau, row, sheet_id, ws_name)
-                    st.success("✅ Données envoyées.")
-                except Exception as e:
-                    st.error(f"❌ Erreur : {e}")
-        else:
-            st.error(f"❌ OCR.space a renvoyé {resp.status_code}")
-
-        # Bouton de téléchargement
-        final_buf = io.BytesIO()
-        enhanced.save(final_buf, format="JPEG", quality=90, optimize=True)
-        st.download_button(
-            label="📥 Télécharger l'image finale",
-            data=final_buf.getvalue(),
-            file_name="image_rognée.jpg",
-            mime="image/jpeg"
-        )
-
-    else:
-        st.info("👆 Dessine une zone pour lancer le traitement.")
-else:
-    st.info("📤 Choisis une image à traiter.")
+# 11) Téléchargement final
+final_buf = io.BytesIO()
+enh.save(final_buf, format="JPEG", quality=90, optimize=True)
+st.download_button(
+    "📥 Télécharger l'image rognée",
+    final_buf.getvalue(),
+    file_name="image_rognée.jpg",
+    mime="image/jpeg"
+)
