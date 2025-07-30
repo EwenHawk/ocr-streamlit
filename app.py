@@ -18,12 +18,11 @@ if "sheet_saved" not in st.session_state:
     st.session_state.sheet_saved = False
 if "results" not in st.session_state:
     st.session_state.results = {}
-    
+if "rectangles" not in st.session_state:
+    st.session_state.rectangles = []
+
 st.set_page_config(page_title="✂️ Rognage + OCR", layout="centered")
 st.title("📸 Rognage + Retouche + OCR 🔎")
-
-id_panneau = st.query_params.get("id_panneau", "")
-TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
 
 uploaded_file = st.file_uploader("Téléverse une image (max 200 MB)", type=["jpg", "png", "jpeg"])
 
@@ -34,7 +33,7 @@ def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
         "isc": "Isc", "lsc": "Isc", "i_sc": "Isc", "isci": "Isc", "Isci": "Isc",
         "pmax": "Pmax", "p_max": "Pmax", "pmax.": "Pmax",
         "vpm": "Vpm", "v_pm": "Vpm", "vpm.": "Vpm",
-        "ipm": "Ipm", "i_pm": "Ipm", "ipm.": "Ipm", "lpm": "Ipm","Iom" : "Ipm", "iom": "Ipm", "lom" : "Ipm", "Lom": "Ipm",
+        "ipm": "Ipm", "i_pm": "Ipm", "ipm.": "Ipm", "lpm": "Ipm", "Iom": "Ipm", "iom": "Ipm", "lom": "Ipm", "Lom": "Ipm",
     }
 
     def normalize_key(raw_key):
@@ -61,7 +60,7 @@ def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
 
     return {key: result.get(key, "Non détecté") for key in expected_keys}
 
-# 📤 Fonction envoi vers Google Sheet
+# 📤 Envoi vers Google Sheet
 def send_to_sheet(id_panneau, row_data, sheet_id, worksheet_name):
     scope = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = Credentials.from_service_account_info(st.secrets["gspread_auth"], scopes=scope)
@@ -91,11 +90,8 @@ if uploaded_file:
     canvas_width = 300
     canvas_height = int(canvas_width * img.height / img.width)
     st.subheader("🟦 Sélectionne une zone")
-    # Initialiser les rectangles si nécessaire
-    if "rectangles" not in st.session_state:
-        st.session_state.rectangles = []
-    
-    # Bouton pour ajouter un nouveau rectangle
+
+    # ➕ Ajout dynamique de rectangles
     if st.button("➕ Ajouter un rectangle"):
         new_rect = {
             "type": "rect",
@@ -107,8 +103,8 @@ if uploaded_file:
             "strokeStyle": "blue"
         }
         st.session_state.rectangles.append(new_rect)
-    
-    # Canevas avec rectangles modifiables
+
+    # 🖼️ Canevas modifiable
     canvas_result = st_canvas(
         background_image=img,
         height=canvas_height,
@@ -161,7 +157,6 @@ if uploaded_file:
                 val = extracted.get(key, "Non détecté")
                 st.text(f"{key} : {val}")
 
-            # ✅ Bouton d'envoi vers Google Sheet
             if st.button("📤 Enregistrer dans Google Sheet"):
                 try:
                     sheet_id = "1yhIVYOqibFnhKKCnbhw8v0f4n1MbfY_4uZhSotK44gc"
@@ -183,6 +178,6 @@ if uploaded_file:
             mime="image/jpeg"
         )
     else:
-        st.info("👆 Dessine un rectangle sur l'image pour sélectionner une zone.")
+        st.info("👆 Dessine ou ajoute un rectangle pour sélectionner une zone.")
 else:
     st.info("📤 Choisis une image à traiter.")
