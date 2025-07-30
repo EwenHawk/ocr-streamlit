@@ -26,7 +26,7 @@ if uploaded_file:
     # 🟦 Canvas avec mode rectangle
     st.subheader("🟦 Dessine un cadre de sélection")
     canvas_result = st_canvas(
-        background_image=compressed_img,
+        background_image=img,
         height=height,
         width=width,
         drawing_mode="rect",
