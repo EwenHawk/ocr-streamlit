@@ -14,8 +14,8 @@ from google.oauth2.service_account import Credentials
 
 # 1) Paramètres généraux
 TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
-query_params = st.experimental_get_query_params()
-id_panneau = query_params.get("id_panneau", [""])[0]
+# Remplacement de experimental_get_query_params par st.query_params
+id_panneau = st.query_params.get("id_panneau", [""])[0]
 
 st.set_page_config(page_title="✂️ Rognage + OCR", layout="centered")
 st.title("📸 Rognage + Retouche + OCR 🔎")
@@ -67,7 +67,7 @@ def compute_crop_on_original(img, bbox, L, T, canvas_w, canvas_h):
 
 def autorefresh(interval_ms=1000, key="last_refresh"):
     """
-    Relance la script toutes les interval_ms tant que crop_done=False.
+    Relance le script toutes les interval_ms tant que crop_done=False.
     """
     if st.session_state.get("crop_done", False):
         return
@@ -190,7 +190,6 @@ if (
     st.session_state.crop_done = True
 
 elif c.json_data and st.session_state.prev_box:
-    # compteur visuel
     elapsed = time.time() - st.session_state.last_move
     remaining = max(0, 3 - int(elapsed))
     st.info(f"Crop dans {remaining}s…")
