@@ -103,7 +103,7 @@ if uploaded_file:
             st.session_state.rectangles.append(new_rect)
 
         valid_rects = [r for r in st.session_state.rectangles if isinstance(r, dict)]
-            canvas_result = st_canvas(
+            canvas_result = canvas_result = st_canvas(
             background_image=img,
             height=canvas_height,
             width=canvas_width,
@@ -112,7 +112,7 @@ if uploaded_file:
             stroke_width=2,
             update_streamlit=True,
             key="canvas_crop"
-            )
+        )
 
         if canvas_result.json_data and canvas_result.json_data.get("objects"):
             obj = canvas_result.json_data["objects"][0]
