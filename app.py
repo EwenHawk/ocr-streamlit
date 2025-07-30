@@ -3,7 +3,6 @@ from streamlit_drawable_canvas import st_canvas
 from PIL import Image
 import numpy as np
 import io
-import base64
 
 st.set_page_config(page_title="✂️ Crop interactif compressé", layout="centered")
 st.title("🖼️ Rogne et compresse ton image")
@@ -22,9 +21,6 @@ if uploaded_file:
     bottom = int(h * 0.7)
     img = img.crop((left, top, right, bottom))
     st.image(img, caption="📸 Image originale", use_container_width=True)
-
-
-    
 
     st.subheader("🎯 Dessine un rectangle de sélection")
     canvas_result = st_canvas(
@@ -55,20 +51,20 @@ if uploaded_file:
         format_choice = st.selectbox("Format de sortie", ["JPEG", "WebP"])
         quality = st.slider("Qualité de compression (%)", 80, 100, 95)
 
-        if st.button("💾 Télécharger l’image compressée"):
-            buffer = io.BytesIO()
-            cropped_img.save(
-                buffer,
-                format=format_choice,
-                quality=quality,
-                optimize=True
-            )
-            buffer.seek(0)
+        buffer = io.BytesIO()
+        cropped_img.save(
+            buffer,
+            format=format_choice,
+            quality=quality,
+            optimize=True
+        )
+        buffer.seek(0)
 
-            b64 = base64.b64encode(buffer.read()).decode()
-            href = f'<a href="data:image/{format_choice.lower()};base64,{b64}" download="image_compressée.{format_choice.lower()}">📥 Clique ici pour télécharger</a>'
-            st.markdown(href, unsafe_allow_html=True)
-            st.success("✅ Image compressée prête à être téléchargée")
-
+        st.download_button(
+            label="📥 Télécharger l’image compressée",
+            data=buffer.getvalue(),
+            file_name=f"image_compressée.{format_choice.lower()}",
+            mime=f"image/{format_choice.lower()}"
+        )
 else:
     st.info("🪄 Téléverse une image pour commencer.")
