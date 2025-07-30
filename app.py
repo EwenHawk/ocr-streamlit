@@ -106,15 +106,15 @@ if uploaded_file:
     valid_rects = [r for r in st.session_state.rectangles if isinstance(r, dict)]
 
     canvas_result = st_canvas(
-        background_image=img,
-        height=canvas_height,
-        width=canvas_width,
-        initial_drawing=valid_rects,
-        drawing_mode="transform",
-        stroke_width=2,
-        update_streamlit=True,
-        key="canvas_crop"
+    background_color="white",
+    height=300,
+    width=300,
+    drawing_mode="rect",
+    stroke_width=2,
+    stroke_color="blue",
+    key="debug_canvas"
     )
+
 
     # 🔍 Lecture du premier rectangle sélectionné
     if canvas_result.json_data and canvas_result.json_data.get("objects"):
