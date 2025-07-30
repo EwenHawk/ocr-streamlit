@@ -15,6 +15,7 @@ if uploaded_file:
 
     # 📥 Ouverture image
     img = Image.open(uploaded_file).convert("RGB")
+    img = img.rotate(-90, expand=True)
 
     # 🖼️ Réduction résolution avant tout affichage
     max_canvas_size = (2000, 2000)
