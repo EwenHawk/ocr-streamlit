@@ -49,7 +49,7 @@ if uploaded_file:
 
         st.subheader("🧪 Options de compression")
         format_choice = st.selectbox("Format de sortie", ["JPEG", "WebP"])
-        quality = st.slider("Qualité de compression (%)", 80, 100, 95)
+        quality = st.slider("Qualité de compression (%)", 80)
 
         buffer = io.BytesIO()
         cropped_img.save(
