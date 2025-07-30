@@ -7,6 +7,18 @@ import re
 import gspread
 from google.oauth2.service_account import Credentials
 
+# 🆔 Récupération de l'ID_Panneau depuis l'URL
+id_panneau = st.query_params.get("id_panneau", "")
+TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
+
+# États Streamlit
+if "selection_mode" not in st.session_state:
+    st.session_state.selection_mode = False
+if "sheet_saved" not in st.session_state:
+    st.session_state.sheet_saved = False
+if "results" not in st.session_state:
+    st.session_state.results = {}
+    
 st.set_page_config(page_title="✂️ Rognage + OCR", layout="centered")
 st.title("📸 Rognage + Retouche + OCR 🔎")
 
