@@ -67,8 +67,7 @@ if uploaded_file:
 
         # ✨ Retouche + export JPEG
         enhancer = ImageEnhance.Contrast(cropped)
-        enhanced = enhancer.enhance(1.2)  # <- image contrastée
-        # ton image recadrée et contrastée
+        enhanced = enhancer.enhance(1.2)
         img_bytes = io.BytesIO()
         enhanced.save(img_bytes, format="JPEG")
         img_bytes.seek(0)
@@ -87,14 +86,13 @@ if uploaded_file:
         if response.status_code == 200:
             result_json = response.json()
             ocr_text = result_json["ParsedResults"][0]["ParsedText"]
-            st.subheader("🔍 Texte brut OCR")
+        
+            # 🔍 Texte brut pour debug
+            st.subheader("🔍 Texte OCR brut")
             st.text(ocr_text)
-
         
-            # 🧠 Extraction des champs
-            TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
-        
-            def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
+            # 🔎 Méthode 1 : extraction par alias
+            def extract_by_alias(text):
                 aliases = {
                     "voc": "Voc", "v_oc": "Voc",
                     "isc": "Isc", "lsc": "Isc", "i_sc": "Isc",
@@ -109,9 +107,27 @@ if uploaded_file:
                             fields[key] = line.strip()
                 return fields
         
-            extracted_fields = extract_ordered_fields(ocr_text)
-            st.subheader("📋 Champs extraits")
-            st.json(extracted_fields)
+            # 🔎 Méthode 2 : association par position
+            def extract_ordered_by_position(text, expected_keys):
+                lines = [line.strip() for line in text.splitlines() if line.strip()]
+                fields = {}
+                for key, value in zip(expected_keys, lines[len(expected_keys):]):
+                    fields[key] = value
+                return fields
+        
+            TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
+        
+            # 🧪 Essai méthode 1
+            extracted = extract_by_alias(ocr_text)
+        
+            # 🔁 Fallback si aucun champ trouvé
+            if not extracted:
+                extracted = extract_ordered_by_position(ocr_text, TARGET_KEYS)
+        
+            # 📋 Affichage résultat
+            st.subheader("📋 Champs extraits OCR")
+            st.json(extracted)
+        
         else:
             st.error(f"❌ Erreur OCR.space ({response.status_code}) : {response.text}")
 
