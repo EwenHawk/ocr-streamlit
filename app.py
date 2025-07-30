@@ -124,12 +124,17 @@ if uploaded_file:
             if not extracted:
                 extracted = extract_ordered_by_position(ocr_text, TARGET_KEYS)
         
-            # 📋 Affichage résultat
+            # 📋 Affichage du résultat en texte clair
             st.subheader("📋 Champs extraits OCR")
-            st.json(extracted)
-        
-        else:
-            st.error(f"❌ Erreur OCR.space ({response.status_code}) : {response.text}")
+            
+            # Format texte : "champ : valeur"
+            if extracted:
+                for key in TARGET_KEYS:
+                    value = extracted.get(key, "non détecté")
+                    st.text(f"{key} : {value}")
+            else:
+                st.warning("⚠️ Aucun champ reconnu via OCR.")
+
 
         # 📥 Téléchargement de l'image retouchée
         final_buffer = io.BytesIO()
