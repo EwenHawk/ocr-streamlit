@@ -11,9 +11,17 @@ st.title("🖼️ Rogne et compresse ton image")
 uploaded_file = st.file_uploader("📤 Téléverse une image", type=["jpg", "png", "jpeg"])
 if uploaded_file:
     img = Image.open(uploaded_file).convert("RGB")
-    img = img.rotate(-90, expand=True)
     img_width, img_height = img.size
-    st.image(img, caption="📸 Image originale", use_container_width=True)
+    img = img.rotate(-90, expand=True)
+
+    # ✂️ Rognage automatique proportionnel
+    w, h = img.size
+    left = int(w * 0.05)
+    right = int(w * 0.85)
+    top = int(h * 0.3)
+    bottom = int(h * 0.7)
+    img = img.crop((left, top, right, bottom))
+    
 
     st.subheader("🎯 Dessine un rectangle de sélection")
     canvas_result = st_canvas(
