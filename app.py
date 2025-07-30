@@ -11,10 +11,11 @@ from PIL import Image, ImageEnhance
 
 import gspread
 from google.oauth2.service_account import Credentials
+# Import de l’exception qui déclenche le rerun
+from streamlit.runtime.scriptrunner import RerunException
 
 # 1) Paramètres généraux
 TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
-# Remplacement de experimental_get_query_params par st.query_params
 id_panneau = st.query_params.get("id_panneau", [""])[0]
 
 st.set_page_config(page_title="✂️ Rognage + OCR", layout="centered")
@@ -60,23 +61,27 @@ def send_to_sheet(id_panneau, row, sheet_id, ws_name):
 
 def compute_crop_on_original(img, bbox, L, T, canvas_w, canvas_h):
     left, top, width, height = bbox
-    sx, sy = img.width/canvas_w, img.height/canvas_h
-    x, y = int(left*sx), int(top*sy)
-    w, h = int(width*sx), int(height*sy)
-    return img.crop((L+x, T+y, L+x+w, T+y+h))
+    sx, sy = img.width / canvas_w, img.height / canvas_h
+    x, y = int(left * sx), int(top * sy)
+    w, h = int(width * sx), int(height * sy)
+    return img.crop((L + x, T + y, L + x + w, T + y + h))
 
 def autorefresh(interval_ms=1000, key="last_refresh"):
     """
-    Relance le script toutes les interval_ms tant que crop_done=False.
+    Relance le script toutes les interval_ms tant que crop_done=False,
+    en levant l’exception RerunException.
     """
     if st.session_state.get("crop_done", False):
         return
+
     now = time.time()
     if key not in st.session_state:
         st.session_state[key] = now
-    if now - st.session_state[key] > interval_ms/1000:
+
+    if now - st.session_state[key] > interval_ms / 1000:
         st.session_state[key] = now
-        st.experimental_rerun()
+        # déclenche un rerun Streamlit
+        raise RerunException
 
 # 3) Upload et préparation
 uploaded = st.file_uploader("Téléverse une image (max 200 MB)", type=["jpg","png","jpeg"])
@@ -87,8 +92,8 @@ if not uploaded:
 original = Image.open(uploaded).convert("RGB")
 original = original.rotate(-90, expand=True)
 w, h = original.size
-L, R = int(w*0.05), int(w*0.85)
-T, B = int(h*0.3), int(h*0.7)
+L, R = int(w * 0.05), int(w * 0.85)
+T, B = int(h * 0.3), int(h * 0.7)
 img = original.crop((L, T, R, B))
 st.image(img, use_container_width=True, caption="🖼️ Image optimisée")
 
@@ -96,7 +101,7 @@ st.image(img, use_container_width=True, caption="🖼️ Image optimisée")
 c_w = 300
 c_h = int(c_w * img.height / img.width)
 
-# état session
+# session state initial
 if "last_move" not in st.session_state:
     st.session_state.last_move = 0.0
 if "crop_done" not in st.session_state:
@@ -113,8 +118,12 @@ if "rectangles" not in st.session_state:
 
 st.subheader("🟦 Ajuste la zone (glisse/redimensionne)")
 
-# relance auto tant que crop pas fait
-autorefresh(1000)
+# on relance le script toutes les 1 s tant que le crop n’est pas fait
+try:
+    autorefresh(1000)
+except RerunException:
+    # on attend que Streamlit relance
+    pass
 
 c = st_canvas(
     background_image=img,
@@ -125,7 +134,7 @@ c = st_canvas(
     key="crop_canvas",
 )
 
-# détecter chaque mouvement
+# détecter le déplacement/redimensionnement
 if c.json_data and c.json_data.get("objects"):
     st.session_state.rectangles = c.json_data["objects"]
     o = st.session_state.rectangles[0]
