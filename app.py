@@ -91,7 +91,7 @@ if uploaded_file:
             st.subheader("🔍 Texte OCR brut")
             st.text(ocr_text)
         
-            # 🔎 Méthode 1 : extraction par alias
+            # 🔎 Méthode 1 : extraction par alias + valeur
             def extract_by_alias(text):
                 aliases = {
                     "voc": "Voc", "v_oc": "Voc",
@@ -100,31 +100,29 @@ if uploaded_file:
                     "vpm": "Vpm", "v_pm": "Vpm", "vpm.": "Vpm",
                     "ipm": "Ipm", "i_pm": "Ipm", "ipm.": "Ipm", "lpm": "Ipm"
                 }
+                lines = [line.strip() for line in text.splitlines() if line.strip()]
                 fields = {}
-                for line in text.splitlines():
+                for i, line in enumerate(lines):
                     for alias, key in aliases.items():
                         if alias.lower() in line.lower():
-                            fields[key] = line.strip()
+                            # 🔎 Cherche une valeur sur la même ligne, ex: "Voc: 1.45V"
+                            if any(unit in line for unit in ["V", "A", "W"]):
+                                fields[key] = line
+                            # 🧠 Sinon, prend la ligne suivante si elle contient une valeur
+                            elif i + 1 < len(lines) and any(u in lines[i+1] for u in ["V", "A", "W"]):
+                                fields[key] = lines[i+1]
                 return fields
-        
-            # 🔎 Méthode 2 : association par position
-            def extract_ordered_by_position(text, expected_keys):
-                # Découpe le texte brut
-                lines = [line.strip() for line in text.splitlines() if line.strip()]
-                
-                # 🧹 On garde uniquement les lignes qui ressemblent à des valeurs
-                values_only = [
-                    line for line in lines
-                    if not line.endswith(":") and any(unit in line for unit in ["V", "A", "W"])
-                ]
-                
-                # Association propre
-                fields = {}
-                for key, value in zip(expected_keys, values_only):
-                    fields[key] = value
-                return fields
-        
-            TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
+
+
+    # 🔁 Fallback si pas complet
+    if len(extracted) < len(TARGET_KEYS):
+        extracted = extract_ordered_by_position(ocr_text, TARGET_KEYS)
+
+    # 📋 Affichage clair
+    st.subheader("📋 Champs extraits OCR")
+    for key in TARGET_KEYS:
+        val = extracted.get(key, "non détecté")
+        st.text(f"{key} : {val}")
         
             # 🧪 Essai méthode 1
             extracted = extract_by_alias(ocr_text)
