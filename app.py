@@ -16,6 +16,12 @@ if uploaded_file:
     # 📥 Ouverture image
     img = Image.open(uploaded_file).convert("RGB")
     img = img.rotate(-90, expand=True)
+    w, h = img.size
+    left = int(w * 0.05)
+    right = int(w * 0.85)
+    top = int(h * 0.3)
+    bottom = int(h * 0.7)
+    img = img.crop((left, top, right, bottom))
 
     # 🖼️ Réduction résolution avant tout affichage
     max_canvas_size = (2000, 2000)
