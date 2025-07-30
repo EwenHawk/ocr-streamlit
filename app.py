@@ -89,18 +89,20 @@ if uploaded_file:
     st.image(img, caption="🖼️ Image optimisée", use_container_width=True)
     st.subheader("🟦 Zone de sélection")
 
-    # ➕ Ajout d'un bouton pour créer un rectangle
+    # ➕ Ajouter un rectangle
     if st.button("➕ Ajouter un rectangle"):
         new_rect = {
             "type": "rect",
-            "left": 40,
-            "top": 40,
-            "width": 100,
-            "height": 60,
+            "left": 10,
+            "top": 10,
+            "width": 80,
+            "height": 50,
             "fillStyle": "rgba(0, 0, 255, 0.3)",
             "strokeStyle": "blue"
         }
         st.session_state.rectangles.append(new_rect)
+        st.experimental_rerun()  # 🔁 Force le refresh
+
 
     # ✅ Contrôle des rectangles valides
     valid_rects = [r for r in st.session_state.rectangles if isinstance(r, dict)]
