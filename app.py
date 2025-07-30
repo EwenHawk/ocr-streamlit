@@ -144,7 +144,7 @@ if img:
         )
 
         if canvas_result.json_data and canvas_result.json_data["objects"]:
-            rect = canvas_result.json_data["objects"][0]
+            rect = canvas_result.json_data["objects"][-1]
             x, y = rect["left"], rect["top"]
             w, h = rect["width"], rect["height"]
             cropped_img = img.crop((x, y, x + w, y + h))
