@@ -7,11 +7,11 @@ import gspread
 from google.oauth2.service_account import Credentials
 from streamlit_drawable_canvas import st_canvas
 
-# 🆔 ID depuis URL
+# 🆔 Récupération de l'ID_Panneau depuis l'URL
 id_panneau = st.query_params.get("id_panneau", "")
 TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
 
-# 🎛️ États
+# États Streamlit
 if "selection_mode" not in st.session_state:
     st.session_state.selection_mode = False
 if "sheet_saved" not in st.session_state:
@@ -19,7 +19,7 @@ if "sheet_saved" not in st.session_state:
 if "results" not in st.session_state:
     st.session_state.results = {}
 
-# 📄 OCR : extraction champs
+# 📄 Extraction OCR
 def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
     aliases = {
         "voc": "Voc", "v_oc": "Voc",
@@ -71,16 +71,17 @@ def send_to_sheet(id_panneau, row_data, sheet_id, worksheet_name):
     sheet.append_row(full_row)
     return True
 
-# 🎨 Interface
+# 🎨 Interface Streamlit
 st.set_page_config(page_title="OCR ToolJet", page_icon="📤", layout="centered")
-st.title("🔍 OCR technique avec traitement intelligent")
+st.title("🔍 OCR technique avec capture et traitement intelligent")
 
+# 👁️ Afficher l'ID reçu
 if id_panneau:
     st.info(f"🆔 ID_Panneau reçu : `{id_panneau}`")
 else:
     st.warning("⚠️ Aucun ID_Panneau détecté dans l’URL")
 
-# 📷 Import ou Caméra
+# 📷 Chargement image
 source = st.radio("📷 Source de l’image :", ["Téléverser un fichier", "Prendre une photo"])
 img = None
 
@@ -88,47 +89,54 @@ if source == "Téléverser un fichier":
     uploaded_file = st.file_uploader("📁 Importer un fichier", type=["jpg", "jpeg", "png"])
     if uploaded_file:
         img = Image.open(uploaded_file)
-        img_original = img.copy()  # 🔒 Garde l'image originale
+
 elif source == "Prendre une photo":
     photo = st.camera_input("📸 Capture via caméra")
     if photo:
         img = Image.open(photo)
-        img_original = img.copy()
 
-# 🖼️ Traitement
+# 🖼️ Traitement image
 if img:
     rotation = st.selectbox("🔁 Rotation", [0, 90, 180, 270], index=0)
     img = img.rotate(-rotation, expand=True)
 
-    # ✂️ Rognage initial
+    # ✂️ Rognage asymétrique : moins à gauche, plus à droite
     w, h = img.size
-    left = int(w * 1/12)
-    right = int(w * 11/12)
-    top = int(h * 1/5)
-    bottom = int(h * 4/5)
+    left = int(w * 1/6)
+    right = int(w * 2/3)
+    top = int(h * 1/4)
+    bottom = int(h * 3/4)
     img = img.crop((left, top, right, bottom))
 
-    # 📐 Redimensionnement
-    max_width = 360
+    # 📐 Redimensionnement éventuel
+    max_width = 800
     if img.width > max_width:
         ratio = max_width / img.width
         img = img.resize((max_width, int(img.height * ratio)), Image.Resampling.LANCZOS)
-    canvas_width, canvas_height = img.size  # 📏 Dimensions canvas
 
-    st.image(img, caption="🖼️ Image rognée", use_container_width=True)
+    st.image(img, caption="🖼️ Image rognée", use_container_width=False)
 
+    # 🎯 Activation mode sélection
     if not st.session_state.selection_mode:
         if st.button("🎯 Je sélectionne une zone à analyser"):
             st.session_state.selection_mode = True
 
+    # 🎨 Sélection via canvas
     if st.session_state.selection_mode:
+        canvas_width, canvas_height = img.size
+
+        rect_left = int(canvas_width * 0.1)
+        rect_top = int(canvas_height * 0.2)
+        rect_width = int(canvas_width * 1)
+        rect_height = int(canvas_height * 0.5)
+
         initial_rect = {
             "objects": [{
                 "type": "rect",
-                "left": int(canvas_width * 0.1),
-                "top": int(canvas_height * 0.2),
-                "width": int(canvas_width * 0.9),
-                "height": int(canvas_height * 0.5),
+                "left": rect_left,
+                "top": rect_top,
+                "width": rect_width,
+                "height": rect_height,
                 "fill": "rgba(255,165,0,0.3)",
                 "stroke": "orange",
                 "strokeWidth": 2
@@ -146,35 +154,23 @@ if img:
         )
 
         if canvas_result.json_data and canvas_result.json_data["objects"]:
-            rect = canvas_result.json_data["objects"][-1]  # 🆕 Prend la dernière modif
+            rect = canvas_result.json_data["objects"][0]
             x, y = rect["left"], rect["top"]
             w, h = rect["width"], rect["height"]
+            cropped_img = img.crop((x, y, x + w, y + h))
 
-            # 🧮 Correction des coordonnées
-            scale_x = img_original.width / canvas_width
-            scale_y = img_original.height / canvas_height
-            x_orig = int(x * scale_x)
-            y_orig = int(y * scale_y)
-            w_orig = int(w * scale_x)
-            h_orig = int(h * scale_y)
-
-            cropped_img = img_original.crop((x_orig, y_orig, x_orig + w_orig, y_orig + h_orig))
-
-            if cropped_img.width > max_width:
-                ratio = max_width / cropped_img.width
-                cropped_img = cropped_img.resize((max_width, int(cropped_img.height * ratio)), Image.Resampling.LANCZOS)
-
-            # 🧼 Prétraitement
+            # 🧼 Prétraitement doux quadrillage
             gray = cropped_img.convert("L")
-            bright = ImageEnhance.Brightness(gray).enhance(1.2)
-            soft_white = bright.point(lambda p: 255 if p > 230 else p)
-            final = ImageEnhance.Contrast(soft_white).enhance(1.1)
+            bright = ImageEnhance.Brightness(gray).enhance(1.5)
+            forced_white = bright.point(lambda p: 255 if p > 200 else p)
+            final = ImageEnhance.Contrast(forced_white).enhance(1.2)
             cleaned = Image.new("RGB", final.size, (255, 255, 255))
             cleaned.paste(final.convert("RGB"))
             cropped_img = cleaned
 
-            st.image(cropped_img, caption="📌 Zone sélectionnée (prétraitée)", use_container_width=True)
+            st.image(cropped_img, caption="📌 Zone sélectionnée (prétraitée)", use_container_width=False)
 
+            # 🔍 Traitement OCR
             if st.button("📤 Lancer le traitement OCR"):
                 img_bytes = io.BytesIO()
                 cropped_img.save(img_bytes, format="JPEG", quality=100)
@@ -188,7 +184,7 @@ if img:
                     st.code(raw_text[:3000], language="text")
                     st.session_state.results = extract_ordered_fields(raw_text)
 
-                    st.subheader("📊 Champs extraits :")
+                    st.subheader("📊 Champs extraits et arrondis :")
                     for key, value in st.session_state.results.items():
                         st.write(f"🔹 **{key}** → {value}")
                     missing = [k for k, v in st.session_state.results.items() if v == "Non détecté"]
@@ -197,10 +193,10 @@ if img:
                     else:
                         st.success("✅ Tous les champs détectés avec succès.")
                 else:
-                    st.warning("⚠ Aucun texte détecté.")
+                    st.warning("⚠️ Aucun texte détecté dans cette zone OCR.")
                     st.session_state.results = {}
 
-# ✅ Enregistrement si données disponibles
+# ✅ Le bouton d'enregistrement s’affiche seulement après OCR
 if st.session_state.results:
     if st.button("✅ Enregistrer les données dans Google Sheet"):
         try:
