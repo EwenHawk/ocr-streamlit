@@ -189,5 +189,3 @@ elif canvas_result.json_data and st.session_state.prev_box:
 
 else:
     st.info("👆 Déplace ou redimensionne le rectangle pour lancer le crop+OCR.")
-else:
-    st.info("📤 Téléverse d'abord une image.")
