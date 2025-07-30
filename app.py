@@ -8,7 +8,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 # 🆔 Récupération de l'ID_Panneau depuis l'URL
-id_panneau = st.query_params.get("id_panneau", [""])[0]
+st.info(f"🆔 ID détecté : `{id_panneau}`")
 TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
 
 # États Streamlit
