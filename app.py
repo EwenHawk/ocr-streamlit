@@ -88,17 +88,19 @@ if source == "Téléverser un fichier":
     uploaded_file = st.file_uploader("📁 Importer un fichier", type=["jpg", "jpeg", "png"])
     if uploaded_file:
         img = Image.open(uploaded_file)
+        img_original = img.copy()  # 🔒 Garde l'image originale
 elif source == "Prendre une photo":
     photo = st.camera_input("📸 Capture via caméra")
     if photo:
         img = Image.open(photo)
+        img_original = img.copy()
 
 # 🖼️ Traitement
 if img:
     rotation = st.selectbox("🔁 Rotation", [0, 90, 180, 270], index=0)
     img = img.rotate(-rotation, expand=True)
 
-    # ✂️ Rognage adouci (~1/3 de moins)
+    # ✂️ Rognage initial
     w, h = img.size
     left = int(w * 1/12)
     right = int(w * 11/12)
@@ -106,11 +108,12 @@ if img:
     bottom = int(h * 4/5)
     img = img.crop((left, top, right, bottom))
 
-    # 📐 Redimensionnement mobile (max 360 px)
+    # 📐 Redimensionnement
     max_width = 360
     if img.width > max_width:
         ratio = max_width / img.width
         img = img.resize((max_width, int(img.height * ratio)), Image.Resampling.LANCZOS)
+    canvas_width, canvas_height = img.size  # 📏 Dimensions canvas
 
     st.image(img, caption="🖼️ Image rognée", use_container_width=True)
 
@@ -119,7 +122,6 @@ if img:
             st.session_state.selection_mode = True
 
     if st.session_state.selection_mode:
-        canvas_width, canvas_height = img.size
         initial_rect = {
             "objects": [{
                 "type": "rect",
@@ -144,12 +146,25 @@ if img:
         )
 
         if canvas_result.json_data and canvas_result.json_data["objects"]:
-            rect = canvas_result.json_data["objects"][-1]
+            rect = canvas_result.json_data["objects"][-1]  # 🆕 Prend la dernière modif
             x, y = rect["left"], rect["top"]
             w, h = rect["width"], rect["height"]
-            cropped_img = img.crop((x, y, x + w, y + h))
 
-            # 🧼 Prétraitement plus doux
+            # 🧮 Correction des coordonnées
+            scale_x = img_original.width / canvas_width
+            scale_y = img_original.height / canvas_height
+            x_orig = int(x * scale_x)
+            y_orig = int(y * scale_y)
+            w_orig = int(w * scale_x)
+            h_orig = int(h * scale_y)
+
+            cropped_img = img_original.crop((x_orig, y_orig, x_orig + w_orig, y_orig + h_orig))
+
+            if cropped_img.width > max_width:
+                ratio = max_width / cropped_img.width
+                cropped_img = cropped_img.resize((max_width, int(cropped_img.height * ratio)), Image.Resampling.LANCZOS)
+
+            # 🧼 Prétraitement
             gray = cropped_img.convert("L")
             bright = ImageEnhance.Brightness(gray).enhance(1.2)
             soft_white = bright.point(lambda p: 255 if p > 230 else p)
@@ -157,10 +172,6 @@ if img:
             cleaned = Image.new("RGB", final.size, (255, 255, 255))
             cleaned.paste(final.convert("RGB"))
             cropped_img = cleaned
-
-            if cropped_img.width > max_width:
-                ratio = max_width / cropped_img.width
-                cropped_img = cropped_img.resize((max_width, int(cropped_img.height * ratio)), Image.Resampling.LANCZOS)
 
             st.image(cropped_img, caption="📌 Zone sélectionnée (prétraitée)", use_container_width=True)
 
@@ -186,7 +197,7 @@ if img:
                     else:
                         st.success("✅ Tous les champs détectés avec succès.")
                 else:
-                    st.warning("⚠️ Aucun texte détecté.")
+                    st.warning("⚠ Aucun texte détecté.")
                     st.session_state.results = {}
 
 # ✅ Enregistrement si données disponibles
