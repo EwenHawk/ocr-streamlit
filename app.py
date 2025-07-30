@@ -66,7 +66,9 @@ if uploaded_file:
         st.image(cropped, caption="📐 Zone sélectionnée")
 
         # ✨ Retouche + export JPEG
-        enhanced = cropped_enhanced  # ton image recadrée et contrastée
+        enhancer = ImageEnhance.Contrast(cropped)
+        enhanced = enhancer.enhance(1.2)  # <- image contrastée
+        # ton image recadrée et contrastée
         img_bytes = io.BytesIO()
         enhanced.save(img_bytes, format="JPEG")
         img_bytes.seek(0)
