@@ -11,45 +11,43 @@ from google.oauth2.service_account import Credentials
 id_panneau = st.query_params.get("id_panneau", "")
 TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
 
-# États Streamlit
-if "selection_mode" not in st.session_state:
-    st.session_state.selection_mode = False
-if "sheet_saved" not in st.session_state:
-    st.session_state.sheet_saved = False
-if "results" not in st.session_state:
-    st.session_state.results = {}
-    
+# 🔁 États Streamlit
+if "rectangles" not in st.session_state:
+    # Rectangle initial généré automatiquement
+    st.session_state.rectangles = [{
+        "type": "rect",
+        "left": 60,
+        "top": 40,
+        "width": 120,
+        "height": 60,
+        "fillStyle": "rgba(0, 0, 255, 0.3)",
+        "strokeStyle": "blue"
+    }]
+
 st.set_page_config(page_title="✂️ Rognage + OCR", layout="centered")
 st.title("📸 Rognage + Retouche + OCR 🔎")
 
-id_panneau = st.query_params.get("id_panneau", "")
-TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
-
 uploaded_file = st.file_uploader("Téléverse une image (max 200 MB)", type=["jpg", "png", "jpeg"])
 
-# 📄 Fonction extraction intelligente
+# 📄 Fonction extraction OCR intelligente
 def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
     aliases = {
         "voc": "Voc", "v_oc": "Voc",
         "isc": "Isc", "lsc": "Isc", "i_sc": "Isc", "isci": "Isc", "Isci": "Isc",
         "pmax": "Pmax", "p_max": "Pmax", "pmax.": "Pmax",
         "vpm": "Vpm", "v_pm": "Vpm", "vpm.": "Vpm",
-        "ipm": "Ipm", "i_pm": "Ipm", "ipm.": "Ipm", "lpm": "Ipm","Iom" : "Ipm", "iom": "Ipm", "lom" : "Ipm", "Lom": "Ipm",
+        "ipm": "Ipm", "i_pm": "Ipm", "ipm.": "Ipm", "lpm": "Ipm", "Iom": "Ipm", "iom": "Ipm", "lom": "Ipm", "Lom": "Ipm",
     }
-
     def normalize_key(raw_key):
         return re.sub(r'[^a-zA-Z]', '', raw_key).lower()
-
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     keys_found, values_found = [], []
-
     for line in lines:
         cleaned_key = normalize_key(line)
         if cleaned_key in aliases:
             keys_found.append(aliases[cleaned_key])
         elif re.match(r"^\d+[.,]?\d*\s*[a-z%ΩVWAm]*$", line, re.IGNORECASE):
             values_found.append(line.strip())
-
     result = {}
     for i in range(min(len(keys_found), len(values_found))):
         raw = values_found[i]
@@ -58,7 +56,6 @@ def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
             result[keys_found[i]] = str(round(float(clean), 1))
         except:
             result[keys_found[i]] = raw
-
     return {key: result.get(key, "Non détecté") for key in expected_keys}
 
 # 📤 Fonction envoi vers Google Sheet
@@ -79,6 +76,7 @@ if uploaded_file:
     original_img = Image.open(uploaded_file).convert("RGB")
     original_img = original_img.rotate(-90, expand=True)
 
+    # 🖼️ Découpage initial
     w, h = original_img.size
     left = int(w * 0.05)
     right = int(w * 0.85)
@@ -86,23 +84,25 @@ if uploaded_file:
     bottom = int(h * 0.7)
     img = original_img.crop((left, top, right, bottom))
 
-    st.image(img, caption="🖼️ Image affichée (optimisée)", use_container_width=True)
+    st.image(img, caption="🖼️ Image optimisée", use_container_width=True)
 
     canvas_width = 300
     canvas_height = int(canvas_width * img.height / img.width)
-    st.subheader("🟦 Sélectionne une zone")
+    st.subheader("🟦 Zone ajustable")
+
+    # ✏️ Canevas avec rectangle modifiable
     canvas_result = st_canvas(
         background_image=img,
         height=canvas_height,
         width=canvas_width,
-        drawing_mode="rect",
-        stroke_width=2,
-        stroke_color="blue",
+        initial_drawing=st.session_state.rectangles,
+        drawing_mode="none",  # ❌ Pas de dessin libre
         update_streamlit=True,
+        stroke_width=2,
         key="canvas_crop"
     )
 
-    if canvas_result.json_data and canvas_result.json_data["objects"]:
+    if canvas_result.json_data and canvas_result.json_data.get("objects"):
         obj = canvas_result.json_data["objects"][0]
         scale_x = img.width / canvas_width
         scale_y = img.height / canvas_height
@@ -120,6 +120,7 @@ if uploaded_file:
         st.subheader("🔍 Image rognée")
         st.image(cropped, caption="📐 Zone sélectionnée")
 
+        # 🔍 OCR
         enhanced = ImageEnhance.Contrast(cropped).enhance(1.2)
         img_bytes = io.BytesIO()
         enhanced.save(img_bytes, format="JPEG")
@@ -140,10 +141,8 @@ if uploaded_file:
             extracted = extract_ordered_fields(ocr_text)
             st.subheader("📋 Champs extraits OCR")
             for key in TARGET_KEYS:
-                val = extracted.get(key, "Non détecté")
-                st.text(f"{key} : {val}")
+                st.text(f"{key} : {extracted.get(key, 'Non détecté')}")
 
-            # ✅ Bouton d'envoi vers Google Sheet
             if st.button("📤 Enregistrer dans Google Sheet"):
                 try:
                     sheet_id = "1yhIVYOqibFnhKKCnbhw8v0f4n1MbfY_4uZhSotK44gc"
@@ -165,6 +164,6 @@ if uploaded_file:
             mime="image/jpeg"
         )
     else:
-        st.info("👆 Dessine un rectangle sur l'image pour sélectionner une zone.")
+        st.info("👆 Utilise le rectangle généré pour ajuster la zone de sélection.")
 else:
-    st.info("📤 Choisis une image à traiter.")
+    st.info("📤 Choisis une image à analyser.")
