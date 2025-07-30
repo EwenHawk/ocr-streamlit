@@ -51,7 +51,7 @@ if uploaded_file:
         import numpy as np
 
         result_img = PILImage.fromarray((canvas_result.image_data).astype(np.uint8))
-        st.image(result_img, caption="🖼️ Image finale", use_column_width=True)
+        st.image(result_img, caption="🖼️ Image finale", use_container_width=True)
         if st.button("💾 Télécharger en PNG"):
             result_img.save("dessin_exporté.png")
             st.success("Dessin sauvegardé en `dessin_exporté.png` ✅")
