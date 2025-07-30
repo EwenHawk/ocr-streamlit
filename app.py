@@ -99,6 +99,7 @@ if uploaded_file:
         stroke_width=2,
         stroke_color="blue",
         update_streamlit=True,
+        disable_drawing=False,
         key="canvas_crop"
     )
 
