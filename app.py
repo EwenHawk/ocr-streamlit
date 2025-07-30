@@ -86,9 +86,18 @@ if source == "Téléverser un fichier":
     if uploaded:
         img = Image.open(uploaded).convert("RGB")
 
-        # 🔄 Rotation automatique à l'import
+        # 🔄 Rotation automatique à 90°
         img = img.rotate(-90, expand=True)
 
+        # ✂️ Rognage automatique proportionnel
+        w, h = img.size
+        left = int(w * 0.05)
+        right = int(w * 0.85)
+        top = int(h * 0.3)
+        bottom = int(h * 0.7)
+        img = img.crop((left, top, right, bottom))
+
+        # ✅ Image unique pour affichage, canvas, OCR
         img_original = img.copy()
 
 elif source == "Prendre une photo":
