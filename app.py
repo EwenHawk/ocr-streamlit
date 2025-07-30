@@ -9,6 +9,7 @@ st.title("🖼️ Sélectionne une zone à rogner")
 uploaded_file = st.file_uploader("📤 Téléverse une image", type=["jpg", "png", "jpeg"])
 if uploaded_file:
     img = Image.open(uploaded_file).convert("RGB")
+    img = img.rotate(-90, expand=True)
     img_width, img_height = img.size
     st.image(img, caption="📸 Image originale", use_container_width=True)
 
