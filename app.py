@@ -114,29 +114,29 @@ if uploaded_file:
                 return fields
 
 
-    # 🔁 Fallback si pas complet
-    if len(extracted) < len(TARGET_KEYS):
-        extracted = extract_ordered_by_position(ocr_text, TARGET_KEYS)
-
-    # 📋 Affichage clair
-    st.subheader("📋 Champs extraits OCR")
-    for key in TARGET_KEYS:
-        val = extracted.get(key, "non détecté")
-        st.text(f"{key} : {val}")
+                # 🔁 Fallback si pas complet
+                if len(extracted) < len(TARGET_KEYS):
+                    extracted = extract_ordered_by_position(ocr_text, TARGET_KEYS)
+            
+                # 📋 Affichage clair
+                st.subheader("📋 Champs extraits OCR")
+                for key in TARGET_KEYS:
+                    val = extracted.get(key, "non détecté")
+                    st.text(f"{key} : {val}")
         
-            # 🧪 Essai méthode 1
-            extracted = extract_by_alias(ocr_text)
-        
-            # 🔁 Fallback si aucun champ trouvé
-            if not extracted:
-                extracted = extract_ordered_by_position(ocr_text, TARGET_KEYS)
-        
-            # 📋 Affichage du résultat en texte clair
-            st.subheader("📋 Champs extraits OCR")
-            st.json(extracted)
-        
-        else:
-            st.error(f"❌ Erreur OCR.space ({response.status_code}) : {response.text}")
+                # 🧪 Essai méthode 1
+                extracted = extract_by_alias(ocr_text)
+            
+                # 🔁 Fallback si aucun champ trouvé
+                if not extracted:
+                    extracted = extract_ordered_by_position(ocr_text, TARGET_KEYS)
+            
+                # 📋 Affichage du résultat en texte clair
+                st.subheader("📋 Champs extraits OCR")
+                st.json(extracted)
+            
+            else:
+                st.error(f"❌ Erreur OCR.space ({response.status_code}) : {response.text}")
 
 
 
