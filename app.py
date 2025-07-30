@@ -88,10 +88,10 @@ if source == "Téléverser un fichier":
 
         # 📐 Rognage proportionnel
         width, height = img.size
-        left = int(width * 0.2)
-        right = int(width * 0.8)
-        top = int(height * 0.25)
-        bottom = int(height * 0.75)
+        left = int(width * 0.1)
+        right = int(width * 0.9)
+        top = int(height * 0.5)
+        bottom = int(height * 0.5)
         cropped_img = img.crop((left, top, right, bottom))
         
         img = cropped_img.copy()       # Image à afficher + dessiner
