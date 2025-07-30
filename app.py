@@ -7,16 +7,17 @@ import gspread
 from google.oauth2.service_account import Credentials
 from streamlit_drawable_canvas import st_canvas
 
-# 🆔 ID depuis URL
+# 🆔 URL paramètre
 id_panneau = st.query_params.get("id_panneau", "")
 TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
 
+# 🎛️ État
 if "sheet_saved" not in st.session_state:
     st.session_state.sheet_saved = False
 if "results" not in st.session_state:
     st.session_state.results = {}
 
-# 🧠 OCR API
+# 📄 OCR API
 def ocr_space_api(img_bytes, api_key="helloworld"):
     try:
         response = requests.post(
@@ -28,7 +29,7 @@ def ocr_space_api(img_bytes, api_key="helloworld"):
     except Exception as e:
         return {"error": str(e)}
 
-# 📄 Extraction champs
+# 🔍 Extraction champs
 def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
     aliases = {
         "voc": "Voc", "v_oc": "Voc",
@@ -58,23 +59,25 @@ def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
             result[keys_found[i]] = raw
     return {key: result.get(key, "Non détecté") for key in expected_keys}
 
-# 📎 Envoi vers Google Sheet
+# 📝 Google Sheet
 def send_to_sheet(id_panneau, row_data, sheet_id, worksheet_name):
     scope = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = Credentials.from_service_account_info(st.secrets["gspread_auth"], scopes=scope)
     client = gspread.authorize(creds)
     sheet = client.open_by_key(sheet_id).worksheet(worksheet_name)
-    sheet.append_row([id_panneau] + row_data)
+    full_row = [id_panneau] + row_data
+    sheet.append_row(full_row)
     return True
 
-# 🎨 Interface
+# 🧭 Configuration
 st.set_page_config(page_title="OCR ToolJet", page_icon="📤", layout="centered")
-st.title("🖍️ OCR technique avec sélection dessinée")
+st.title("🖍️ OCR avec sélection dessinée et image responsive")
 
 if id_panneau:
     st.info(f"🆔 ID_Panneau : `{id_panneau}`")
 
-source = st.radio("📷 Source image :", ["Téléverser un fichier", "Prendre une photo"])
+# 📷 Source image
+source = st.radio("📷 Source de l’image :", ["Téléverser un fichier", "Prendre une photo"])
 img = None
 img_original = None
 
@@ -84,24 +87,24 @@ if source == "Téléverser un fichier":
         img = Image.open(uploaded)
         img_original = img.copy()
 elif source == "Prendre une photo":
-    photo = st.camera_input("📸 Capture photo")
+    photo = st.camera_input("📸 Prendre une photo")
     if photo:
         img = Image.open(photo)
         img_original = img.copy()
 
+# 🖼️ Affichage + sélection
 if img:
     rotation = st.selectbox("🔁 Rotation", [0, 90, 180, 270], index=0)
-
-    # 🖼️ Appliquer rotation pour affichage (mais pas sur img_original)
     rotated = img.rotate(-rotation, expand=True)
 
-    # 📐 Définir dimensions canvas
+    # 📏 Récupération des dimensions
     canvas_width, canvas_height = rotated.size
 
-    st.image(rotated, caption="🖼️ Image affichée (rotation appliquée)", width=canvas_width)
+    # ✅ Image responsive
+    st.image(rotated, caption="🖼️ Image affichée avec rotation", use_container_width=True)
 
-    # ✏️ Zone dessinée par utilisateur
-    canvas = st_canvas(
+    st.subheader("✏️ Dessinez une zone à OCR (pression souris)")
+    canvas_result = st_canvas(
         background_image=rotated,
         height=canvas_height,
         width=canvas_width,
@@ -109,15 +112,15 @@ if img:
         stroke_color="red",
         stroke_width=2,
         update_streamlit=True,
-        key="canvas-free"
+        key="freedraw"
     )
 
-    if canvas.json_data and canvas.json_data["objects"]:
-        obj = canvas.json_data["objects"][-1]
+    if canvas_result.json_data and canvas_result.json_data["objects"]:
+        obj = canvas_result.json_data["objects"][-1]
         x, y = obj["left"], obj["top"]
         w, h = obj["width"], obj["height"]
 
-        # 🔁 Convertir vers image originale
+        # 🔁 Conversion vers image originale
         scale_x = img_original.width / canvas_width
         scale_y = img_original.height / canvas_height
         x_orig = int(x * scale_x)
@@ -162,8 +165,9 @@ if img:
             else:
                 st.warning("🚫 Aucun texte détecté")
 
+# ✅ Google Sheet
 if st.session_state.results:
-    if st.button("✅ Envoyer vers Google Sheet"):
+    if st.button("✅ Enregistrer dans Google Sheet"):
         try:
             sheet_id = "1yhIVYOqibFnhKKCnbhw8v0f4n1MbfY_4uZhSotK44gc"
             worksheet_name = "Tests_Panneaux"
@@ -171,7 +175,7 @@ if st.session_state.results:
             send_to_sheet(id_panneau, row, sheet_id, worksheet_name)
             st.session_state.sheet_saved = True
         except Exception as e:
-            st.error(f"❌ Erreur : {e}")
+            st.error(f"❌ Enregistrement échoué : {e}")
 
 if st.session_state.sheet_saved:
-    st.success("📡 Données enregistrées dans Google Sheet")
+    st.success("📡 Données envoyées dans Google Sheet")
