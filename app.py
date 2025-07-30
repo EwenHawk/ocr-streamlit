@@ -120,7 +120,6 @@ if st.session_state.selection_mode:
     initial_rect = {...}
     canvas_result = st_canvas(
         background_image=rotated_preview,
-        ...
         height=rotated_preview.height,
         width=rotated_preview.width,
         key="canvas"
