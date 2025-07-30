@@ -65,24 +65,31 @@ if uploaded_file:
         st.subheader("🔍 Image rognée")
         st.image(cropped, caption="📐 Zone sélectionnée")
 
-        # ✨ Retouche contraste
-        enhancer = ImageEnhance.Contrast(cropped)
-        enhanced = enhancer.enhance(1.2)
-
-        # 📤 OCR : envoyer image à l’API
+        # ✨ Retouche + export JPEG
+        enhanced = cropped_enhanced  # ton image recadrée et contrastée
         img_bytes = io.BytesIO()
         enhanced.save(img_bytes, format="JPEG")
+        img_bytes.seek(0)
+        
+        # 🔐 API OCR.space
+        ocr_url = "https://api.ocr.space/parse/image"
+        api_key = "K81047805588957"
+        
         response = requests.post(
             ocr_url,
-            headers={"Authorization": f"Bearer {api_key}"},
-            files={"file": ("image.jpg", img_bytes.getvalue(), "image/jpeg")}
+            files={"file": ("image.jpg", img_bytes, "image/jpeg")},
+            data={"apikey": api_key, "language": "eng"}
         )
-
-        # 📄 Traitement réponse OCR
+        
+        # 📄 Résultat
         if response.status_code == 200:
-            ocr_text = response.text  # ou .json()["text"] selon ton API
-
-            def extract_ordered_fields(text, expected_keys):
+            result_json = response.json()
+            ocr_text = result_json["ParsedResults"][0]["ParsedText"]
+        
+            # 🧠 Extraction des champs
+            TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
+        
+            def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
                 aliases = {
                     "voc": "Voc", "v_oc": "Voc",
                     "isc": "Isc", "lsc": "Isc", "i_sc": "Isc",
@@ -96,14 +103,12 @@ if uploaded_file:
                         if alias.lower() in line.lower():
                             fields[key] = line.strip()
                 return fields
-
-            TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
-            extracted = extract_ordered_fields(ocr_text, TARGET_KEYS)
-
-            st.subheader("📋 Champs OCR extraits")
-            st.json(extracted)
+        
+            extracted_fields = extract_ordered_fields(ocr_text)
+            st.subheader("📋 Champs extraits")
+            st.json(extracted_fields)
         else:
-            st.error(f"❌ Erreur OCR ({response.status_code}) : {response.text}")
+            st.error(f"❌ Erreur OCR.space ({response.status_code}) : {response.text}")
 
         # 📥 Téléchargement de l'image retouchée
         final_buffer = io.BytesIO()
