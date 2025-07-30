@@ -103,7 +103,7 @@ if uploaded_file:
             st.session_state.rectangles.append(new_rect)
 
         valid_rects = [r for r in st.session_state.rectangles if isinstance(r, dict)]
-            canvas_result = st_canvas(
+        canvas_result = st_canvas(
             background_image=img,
             height=canvas_height,
             width=canvas_width,
