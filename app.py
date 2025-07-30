@@ -23,24 +23,6 @@ if uploaded_file:
     bottom = int(h * 0.7)
     img = img.crop((left, top, right, bottom))
 
-    # 🖼️ Réduction résolution avant tout affichage
-    max_canvas_size = (2000, 2000)
-    img.thumbnail(max_canvas_size, Image.Resampling.LANCZOS)
-
-    # 🗜️ Compression dynamique
-    buffer = io.BytesIO()
-    img.save(buffer, format="JPEG", quality=quality, optimize=True)
-    size = buffer.tell()
-
-    while size > max_size_bytes and quality > 10:
-        buffer = io.BytesIO()
-        quality -= 5
-        img.save(buffer, format="JPEG", quality=quality, optimize=True)
-        size = buffer.tell()
-
-    compressed_img = Image.open(buffer)
-    width, height = compressed_img.size
-
     # 🟦 Canvas avec mode rectangle
     st.subheader("🟦 Dessine un cadre de sélection")
     canvas_result = st_canvas(
