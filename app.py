@@ -28,8 +28,8 @@ if uploaded_file:
     st.subheader("🟦 Dessine un cadre de sélection")
     canvas_result = st_canvas(
         background_image=img,
-        height=canvas_height,
-        width=canvas_width,
+        height=2000,
+        width=2000,
         drawing_mode="rect",
         stroke_width=2,
         stroke_color="blue",
