@@ -1,22 +1,25 @@
 import streamlit as st
 from streamlit_drawable_canvas import st_canvas
-from PIL import Image
+from PIL import Image, ImageEnhance
 import io
+import requests
 
-st.set_page_config(page_title="✂️ Rognage par cadre", layout="centered")
-st.title("📸 Rognage d'image avec compression & optimisation")
+st.set_page_config(page_title="✂️ Rognage + OCR", layout="centered")
+st.title("📸 Rognage + Retouche + OCR 🔎")
 
 # 📤 Téléversement
 uploaded_file = st.file_uploader("Téléverse une image (max 200 MB)", type=["jpg", "png", "jpeg"])
+
 if uploaded_file:
-    max_size_bytes = 200 * 1024 * 1024  # 200 MB
     quality = 90
+    api_key = "K81047805588957"  # 🧠 Ta clé API OCR
+    ocr_url = "https://ton-api-ocr.com/analyse"  # À adapter avec ton endpoint réel
 
     # 🧩 Image originale
     original_img = Image.open(uploaded_file).convert("RGB")
     original_img = original_img.rotate(-90, expand=True)
 
-    # 🧮 Crop pour version réduite
+    # ✂️ Crop pour affichage optimisé
     w, h = original_img.size
     left = int(w * 0.05)
     right = int(w * 0.85)
@@ -24,14 +27,12 @@ if uploaded_file:
     bottom = int(h * 0.7)
     img = original_img.crop((left, top, right, bottom))
 
-    # 🖼️ Affichage image réduite
-    st.image(img, caption="🖼️ Image affichée avec rotation", use_container_width=True)
+    st.image(img, caption="🖼️ Image affichée (optimisée)", use_container_width=True)
 
-    # 📏 Taille canvas choisie
+    # 🖌️ Canvas
     canvas_width = 300
-    canvas_height = int(canvas_width * img.height / img.width)  # conserve ratio
-
-    st.subheader("🟦 Dessine un cadre de sélection")
+    canvas_height = int(canvas_width * img.height / img.width)
+    st.subheader("🟦 Sélectionne une zone")
     canvas_result = st_canvas(
         background_image=img,
         height=canvas_height,
@@ -45,17 +46,15 @@ if uploaded_file:
 
     if canvas_result.json_data and canvas_result.json_data["objects"]:
         obj = canvas_result.json_data["objects"][0]
-        # 🎯 Mise à l’échelle
+
+        # 🔁 Mise à l’échelle vers dimensions réelles
         scale_x = img.width / canvas_width
         scale_y = img.height / canvas_height
-
-        # 🧮 Coordonnées dans l'image affichée
         x = int(obj["left"] * scale_x)
         y = int(obj["top"] * scale_y)
         w_sel = int(obj["width"] * scale_x)
         h_sel = int(obj["height"] * scale_y)
 
-        # 🔁 Ajuster pour image d'origine
         crop_left = left + x
         crop_top = top + y
         crop_right = crop_left + w_sel
@@ -63,11 +62,52 @@ if uploaded_file:
 
         cropped = original_img.crop((crop_left, crop_top, crop_right, crop_bottom)).convert("RGB")
 
-        st.subheader("🔍 Résultat rogné")
-        st.image(cropped, caption="📐 Image rognée et compressée")
+        st.subheader("🔍 Image rognée")
+        st.image(cropped, caption="📐 Zone sélectionnée")
 
+        # ✨ Retouche contraste
+        enhancer = ImageEnhance.Contrast(cropped)
+        enhanced = enhancer.enhance(1.2)
+
+        # 📤 OCR : envoyer image à l’API
+        img_bytes = io.BytesIO()
+        enhanced.save(img_bytes, format="JPEG")
+        response = requests.post(
+            ocr_url,
+            headers={"Authorization": f"Bearer {api_key}"},
+            files={"file": ("image.jpg", img_bytes.getvalue(), "image/jpeg")}
+        )
+
+        # 📄 Traitement réponse OCR
+        if response.status_code == 200:
+            ocr_text = response.text  # ou .json()["text"] selon ton API
+
+            def extract_ordered_fields(text, expected_keys):
+                aliases = {
+                    "voc": "Voc", "v_oc": "Voc",
+                    "isc": "Isc", "lsc": "Isc", "i_sc": "Isc",
+                    "pmax": "Pmax", "p_max": "Pmax", "pmax.": "Pmax",
+                    "vpm": "Vpm", "v_pm": "Vpm", "vpm.": "Vpm",
+                    "ipm": "Ipm", "i_pm": "Ipm", "ipm.": "Ipm", "lpm": "Ipm"
+                }
+                fields = {}
+                for line in text.splitlines():
+                    for alias, key in aliases.items():
+                        if alias.lower() in line.lower():
+                            fields[key] = line.strip()
+                return fields
+
+            TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
+            extracted = extract_ordered_fields(ocr_text, TARGET_KEYS)
+
+            st.subheader("📋 Champs OCR extraits")
+            st.json(extracted)
+        else:
+            st.error(f"❌ Erreur OCR ({response.status_code}) : {response.text}")
+
+        # 📥 Téléchargement de l'image retouchée
         final_buffer = io.BytesIO()
-        cropped.save(final_buffer, format="JPEG", quality=quality, optimize=True)
+        enhanced.save(final_buffer, format="JPEG", quality=quality, optimize=True)
         st.download_button(
             label=f"📥 Télécharger (qualité {quality}, taille ~{round(final_buffer.tell() / 1024 / 1024, 2)} MB)",
             data=final_buffer.getvalue(),
