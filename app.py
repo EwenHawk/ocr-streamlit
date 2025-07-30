@@ -1,70 +1,52 @@
 import streamlit as st
 from streamlit_drawable_canvas import st_canvas
 from PIL import Image
-import numpy as np
 import io
 
-st.set_page_config(page_title="✂️ Crop interactif compressé", layout="centered")
-st.title("🖼️ Rogne et compresse ton image")
+st.set_page_config(page_title="✂️ Rognage par cadre", layout="centered")
+st.title("📸 Rognage d'image visuel")
 
-uploaded_file = st.file_uploader("📤 Téléverse une image", type=["jpg", "png", "jpeg"])
+# 📤 Téléversement
+uploaded_file = st.file_uploader("Téléverse une image", type=["jpg", "png", "jpeg"])
 if uploaded_file:
     img = Image.open(uploaded_file).convert("RGB")
-    img_width, img_height = img.size
-    img = img.rotate(-90, expand=True)
+    img = img.rotate(-90, expand=True)  # rotation automatique si nécessaire
 
-    # ✂️ Rognage automatique proportionnel
-    w, h = img.size
-    left = int(w * 0.05)
-    right = int(w * 0.85)
-    top = int(h * 0.3)
-    bottom = int(h * 0.7)
-    img = img.crop((left, top, right, bottom))
-    st.image(img, caption="📸 Image originale", use_container_width=True)
+    width, height = img.size
 
-    st.subheader("🎯 Dessine un rectangle de sélection")
+    # 🧰 Canvas avec mode rectangle
+    st.subheader("🟦 Dessine un cadre de sélection")
     canvas_result = st_canvas(
-        fill_color="rgba(255, 0, 0, 0.3)",
-        stroke_width=2,
         background_image=img,
-        update_streamlit=True,
-        height=img_height,
-        width=img_width,
+        height=height,
+        width=width,
         drawing_mode="rect",
-        key="canvas_crop",
+        stroke_width=2,
+        stroke_color="blue",
+        update_streamlit=True,
+        key="canvas_crop"
     )
 
+    # ✂️ Si un rectangle est dessiné : on rogne l’image selon ce cadre
     if canvas_result.json_data and canvas_result.json_data["objects"]:
         obj = canvas_result.json_data["objects"][0]
-        left = int(obj["left"])
-        top = int(obj["top"])
-        width = int(obj["width"])
-        height = int(obj["height"])
-        right = left + width
-        bottom = top + height
+        x, y = int(obj["left"]), int(obj["top"])
+        w, h = int(obj["width"]), int(obj["height"])
+        cropped = img.crop((x, y, x + w, y + h)).convert("RGB")
 
-        cropped_img = img.crop((left, top, right, bottom)).convert("RGB")
-        st.subheader("🔍 Aperçu de l’image croppée")
-        st.image(cropped_img, caption="✂️ Image rognée")
+        st.subheader("🔍 Résultat rogné")
+        st.image(cropped, caption="📐 Image rognée automatiquement")
 
-        st.subheader("🧪 Options de compression")
-        format_choice = st.selectbox("Format de sortie", ["JPEG", "WebP"])
-        quality = st.slider("Qualité de compression (%)", 80)
-
+        # 💾 Téléchargement
         buffer = io.BytesIO()
-        cropped_img.save(
-            buffer,
-            format=format_choice,
-            quality=quality,
-            optimize=True
-        )
-        buffer.seek(0)
-
+        cropped.save(buffer, format="JPEG", quality=90, optimize=True)
         st.download_button(
-            label="📥 Télécharger l’image compressée",
+            label="📥 Télécharger l'image rognée",
             data=buffer.getvalue(),
-            file_name=f"image_compressée.{format_choice.lower()}",
-            mime=f"image/{format_choice.lower()}"
+            file_name="image_rognee.jpg",
+            mime="image/jpeg"
         )
+    else:
+        st.info("👆 Dessine un rectangle sur l'image pour sélectionner une zone.")
 else:
-    st.info("🪄 Téléverse une image pour commencer.")
+    st.info("📤 Choisis une image à traiter.")
