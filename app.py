@@ -105,7 +105,7 @@ if uploaded_file:
     
     # Contrôle des rectangles valides
     valid_rects = [r for r in st.session_state.rectangles if isinstance(r, dict)]
-    
+    st.write("🧪 Type de background_image :", type(img))
     # Affichage du canevas
     canvas_result = st_canvas(
         background_image=img,
