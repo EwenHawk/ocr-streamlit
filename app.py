@@ -12,7 +12,6 @@ if uploaded_file:
     # 🧮 Limite strictement 200 MB en octets
     max_size_bytes = 200 * 1024 * 1024  # 200 MB
     quality = 90
-
     # 📥 Ouverture image
     img = Image.open(uploaded_file).convert("RGB")
     img = img.rotate(-90, expand=True)
@@ -22,14 +21,15 @@ if uploaded_file:
     top = int(h * 0.3)
     bottom = int(h * 0.7)
     img = img.crop((left, top, right, bottom))
-    height, width = img.size
+    st.image(img, caption="🖼️ Image affichée avec rotation", use_container_width=True)
+    canvas_height, canvas_width = img.size
 
     # 🟦 Canvas avec mode rectangle
     st.subheader("🟦 Dessine un cadre de sélection")
     canvas_result = st_canvas(
         background_image=img,
-        height=height,
-        width=width,
+        height=canvas_height,
+        width=canvas_width,
         drawing_mode="rect",
         stroke_width=2,
         stroke_color="blue",
