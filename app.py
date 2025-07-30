@@ -85,35 +85,24 @@ if source == "Téléverser un fichier":
     uploaded = st.file_uploader("📁 Importer une image", type=["jpg", "jpeg", "png"])
     if uploaded:
         img = Image.open(uploaded).convert("RGB")
-    
-        # 🔄 Rotation automatique à 90°
-        rotated_img = img.rotate(-90, expand=True)
-    
-        # 📐 Rognage (si souhaité — sinon à retirer)
-        width, height = rotated_img.size
-        left = int(width * 0.05)
-        right = int(width * 0.85)
-        top = int(height * 0.3)
-        bottom = int(height * 0.7)
-        cropped_img = rotated_img.crop((left, top, right, bottom))
-    
-        img = cropped_img.copy()       # Pour affichage + dessin
-        img_original = cropped_img.copy()  # Pour OCR + traitement
+
+        # 🔄 Rotation automatique à l'import
+        img = img.rotate(-90, expand=True)
+
+        img_original = img.copy()
+
 elif source == "Prendre une photo":
     photo = st.camera_input("📸 Prendre une photo")
     if photo:
-        img = Image.open(photo)
+        img = Image.open(photo).convert("RGB")
         img_original = img.copy()
 
 # 🖼️ Affichage + sélection
 if img:
-    rotation = st.selectbox("🔁 Rotation", [0, 90, 180, 270], index=0)
+    rotation = st.selectbox("🔁 Rotation supplémentaire", [0, 90, 180, 270], index=0)
     rotated = img.rotate(-rotation, expand=True)
 
-    # 📏 Récupération des dimensions
     canvas_width, canvas_height = rotated.size
-
-    # ✅ Image responsive
     st.image(rotated, caption="🖼️ Image affichée avec rotation", use_container_width=True)
 
     st.subheader("✏️ Dessinez une zone à OCR (pression souris)")
@@ -133,7 +122,6 @@ if img:
         x, y = obj["left"], obj["top"]
         w, h = obj["width"], obj["height"]
 
-        # 🔁 Conversion vers image originale
         scale_x = img_original.width / canvas_width
         scale_y = img_original.height / canvas_height
         x_orig = int(x * scale_x)
@@ -144,7 +132,6 @@ if img:
         cropped = img_original.crop((x_orig, y_orig, x_orig + w_orig, y_orig + h_orig))
         cropped = cropped.rotate(-rotation, expand=True)
 
-        # 🧼 Prétraitement doux
         gray = cropped.convert("L")
         bright = ImageEnhance.Brightness(gray).enhance(1.2)
         white_soft = bright.point(lambda p: 255 if p > 230 else p)
@@ -178,7 +165,6 @@ if img:
             else:
                 st.warning("🚫 Aucun texte détecté")
 
-# ✅ Google Sheet
 if st.session_state.results:
     if st.button("✅ Enregistrer dans Google Sheet"):
         try:
