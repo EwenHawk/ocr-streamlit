@@ -20,12 +20,12 @@ for key, default in [
 
 st.set_page_config(page_title="✂️ Rognage + OCR", layout="centered")
 st.title("📸 Rognage + Retouche + OCR 🔎")
-
-uploaded_file = st.file_uploader("Téléverse une image (max 200 MB)", type=["jpg", "png", "jpeg"])
-
 # 🆔 Récupération de l'ID_Panneau depuis l'URL
 id_panneau = str(st.query_params.get("id_panneau", [""]))
 st.info(f"🆔 ID détecté : `{id_panneau}`")
+
+uploaded_file = st.file_uploader("Téléverse une image (max 200 MB)", type=["jpg", "png", "jpeg"])
+
 # Désactive le scroll sur le canvas pour améliorer le tactile
 st.markdown("""
 <style>
