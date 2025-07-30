@@ -4,21 +4,20 @@ import re
 import requests
 
 import streamlit as st
-from streamlit import experimental as st_ex
+from streamlit_autorefresh import st_autorefresh
 from streamlit_drawable_canvas import st_canvas
 from PIL import Image, ImageEnhance
 
 import gspread
 from google.oauth2.service_account import Credentials
 
-# paramètres
+# paramètres généraux
 TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
 id_panneau = st.experimental_get_query_params().get("id_panneau", [""])[0]
 
 st.set_page_config(page_title="✂️ Rognage + OCR", layout="centered")
 st.title("📸 Rognage + Retouche + OCR 🔎")
 
-# fonctions utilitaires
 def extract_ordered_fields(text, expected_keys=TARGET_KEYS):
     aliases = {
         "voc":"Voc","v_oc":"Voc",
@@ -65,9 +64,8 @@ def compute_crop_on_original(img, bbox, L, T, canvas_w, canvas_h):
     h = int(height * scale_y)
     return img.crop((L + x, T + y, L + x + w, T + y + h))
 
-# interface
+# upload
 uploaded_file = st.file_uploader("Téléverse une image (max 200 MB)", type=["jpg","png","jpeg"])
-
 if not uploaded_file:
     st.info("📤 Téléverse d'abord une image.")
     st.stop()
@@ -81,13 +79,14 @@ T, B = int(h * 0.3), int(h * 0.7)
 img = original.crop((L, T, R, B))
 st.image(img, use_container_width=True, caption="🖼️ Image optimisée")
 
-# dimension du canevas
+# canevas
 c_w = 300
 c_h = int(c_w * img.height / img.width)
 
-# debounce setup
-st_ex.st_autorefresh(interval=1000, key="auto_refresh")
+# debounce : autorefresh chaque seconde
+st_autorefresh(interval=1000, key="auto_refresh")
 
+# état
 if "last_move" not in st.session_state:
     st.session_state.last_move = 0.0
 if "crop_done" not in st.session_state:
@@ -104,18 +103,14 @@ if "rectangles" not in st.session_state:
     }]
 
 st.subheader("🟦 Ajuste la zone (glisse/redimensionne)")
-
 canvas_result = st_canvas(
     background_image=img,
-    width=c_w,
-    height=c_h,
+    width=c_w, height=c_h,
     initial_drawing={"objects": st.session_state.rectangles},
-    drawing_mode="transform",
-    update_streamlit=True,
-    key="crop_canvas"
+    drawing_mode="transform", update_streamlit=True, key="crop_canvas"
 )
 
-# on détecte un mouvement de la boîte
+# détection de mouvement
 if canvas_result.json_data and canvas_result.json_data.get("objects"):
     st.session_state.rectangles = canvas_result.json_data["objects"]
     obj = st.session_state.rectangles[0]
@@ -126,28 +121,29 @@ if canvas_result.json_data and canvas_result.json_data.get("objects"):
         st.session_state.crop_done = False
         st.session_state.prev_box = current_box
 
-# on crop + OCR après 3 s d'inactivité
+# exécution du crop+OCR après 3 s d'inactivité
 if (
     st.session_state.prev_box is not None
     and not st.session_state.crop_done
     and time.time() - st.session_state.last_move > 3
 ):
-    # découpe
+    # crop
     cropped = compute_crop_on_original(
-        original, st.session_state.prev_box, L, T, c_w, c_h
+        original,
+        st.session_state.prev_box,
+        L, T, c_w, c_h
     ).convert("RGB")
     st.subheader("🔍 Image rognée")
     st.image(cropped, caption="📐 Zone sélectionnée")
 
-    # amélioration contraste + OCR
+    # contraste + OCR
     enhanced = ImageEnhance.Contrast(cropped).enhance(1.2)
     buf = io.BytesIO()
-    enhanced.save(buf, format="JPEG")
-    buf.seek(0)
+    enhanced.save(buf, "JPEG"); buf.seek(0)
     resp = requests.post(
         "https://api.ocr.space/parse/image",
-        files={"file":("img.jpg", buf, "image/jpeg")},
-        data={"apikey":"K81047805588957","language":"eng","OCREngine":2}
+        files={"file": ("img.jpg", buf, "image/jpeg")},
+        data={"apikey": "K81047805588957", "language": "eng", "OCREngine": 2}
     )
 
     if resp.status_code == 200:
@@ -174,15 +170,14 @@ if (
     else:
         st.error(f"OCR.space error {resp.status_code}")
 
-    # téléchargement
+    # bouton download
     dl = io.BytesIO()
-    enhanced.save(dl, format="JPEG", quality=90, optimize=True)
+    enhanced.save(dl, "JPEG", quality=90, optimize=True)
     st.download_button("📥 Télécharger", dl.getvalue(), "crop.jpg", "image/jpeg")
 
     st.session_state.crop_done = True
 
 elif canvas_result.json_data and st.session_state.prev_box:
-    # retour visuel sur le debounce
     elapsed = time.time() - st.session_state.last_move
     remaining = max(0, 3 - int(elapsed))
     st.info(f"Crop dans {remaining} s si pas de mouvement…")
