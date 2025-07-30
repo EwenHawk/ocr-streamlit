@@ -1,5 +1,3 @@
-# app.py
-
 import time
 import io
 import re
@@ -11,8 +9,6 @@ from PIL import Image, ImageEnhance
 
 import gspread
 from google.oauth2.service_account import Credentials
-# Import de l’exception qui déclenche le rerun
-from streamlit.runtime.scriptrunner import RerunException
 
 # 1) Paramètres généraux
 TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
@@ -66,24 +62,24 @@ def compute_crop_on_original(img, bbox, L, T, canvas_w, canvas_h):
     w, h = int(width * sx), int(height * sy)
     return img.crop((L + x, T + y, L + x + w, T + y + h))
 
-def autorefresh(interval_ms=1000, key="last_refresh"):
+def autorefresh(interval_s: float = 1.0):
     """
-    Relance le script toutes les interval_ms tant que crop_done=False,
-    en levant l’exception RerunException.
+    Force un rerun en ajoutant/modifiant un paramètre URL toutes les interval_s secondes,
+    tant que crop_done == False.
     """
     if st.session_state.get("crop_done", False):
         return
 
     now = time.time()
-    if key not in st.session_state:
-        st.session_state[key] = now
+    last = st.session_state.get("_last_refresh", None)
+    if last is None or (now - last) > interval_s:
+        st.session_state["_last_refresh"] = now
+        # on copie les query-params existants + un timestamp
+        params = dict(st.query_params)
+        params["_autorefresh"] = str(now)
+        st.experimental_set_query_params(**params)
 
-    if now - st.session_state[key] > interval_ms / 1000:
-        st.session_state[key] = now
-        # déclenche un rerun Streamlit
-        raise RerunException
-
-# 3) Upload et préparation
+# 3) Upload + Préparation
 uploaded = st.file_uploader("Téléverse une image (max 200 MB)", type=["jpg","png","jpeg"])
 if not uploaded:
     st.info("📤 Téléverse d'abord une image.")
@@ -97,35 +93,28 @@ T, B = int(h * 0.3), int(h * 0.7)
 img = original.crop((L, T, R, B))
 st.image(img, use_container_width=True, caption="🖼️ Image optimisée")
 
-# 4) Canvas + debounce
+# 4) Canvas + Debounce
 c_w = 300
 c_h = int(c_w * img.height / img.width)
 
-# session state initial
-if "last_move" not in st.session_state:
-    st.session_state.last_move = 0.0
-if "crop_done" not in st.session_state:
-    st.session_state.crop_done = False
-if "prev_box" not in st.session_state:
-    st.session_state.prev_box = None
-if "rectangles" not in st.session_state:
-    st.session_state.rectangles = [{
-        "type": "rect", "left": 30, "top": 30,
-        "width": 120, "height": 80,
-        "fill": "rgba(0, 0, 255, 0.2)",
-        "stroke": "blue", "strokeWidth": 2
-    }]
+# état session
+st.session_state.setdefault("last_move", 0.0)
+st.session_state.setdefault("crop_done", False)
+st.session_state.setdefault("prev_box", None)
+st.session_state.setdefault("rectangles", [{
+    "type": "rect",
+    "left": 30, "top": 30,
+    "width": 120, "height": 80,
+    "fill": "rgba(0, 0, 255, 0.2)",
+    "stroke": "blue", "strokeWidth": 2
+}])
 
 st.subheader("🟦 Ajuste la zone (glisse/redimensionne)")
 
-# on relance le script toutes les 1 s tant que le crop n’est pas fait
-try:
-    autorefresh(1000)
-except RerunException:
-    # on attend que Streamlit relance
-    pass
+# Lance notre autorefresh maison
+autorefresh(1.0)
 
-c = st_canvas(
+canvas_result = st_canvas(
     background_image=img,
     width=c_w, height=c_h,
     initial_drawing={"objects": st.session_state.rectangles},
@@ -134,9 +123,9 @@ c = st_canvas(
     key="crop_canvas",
 )
 
-# détecter le déplacement/redimensionnement
-if c.json_data and c.json_data.get("objects"):
-    st.session_state.rectangles = c.json_data["objects"]
+# Détecte le déplacement du rectangle
+if canvas_result.json_data and canvas_result.json_data.get("objects"):
+    st.session_state.rectangles = canvas_result.json_data["objects"]
     o = st.session_state.rectangles[0]
     box = (o["left"], o["top"], o["width"], o["height"])
     now = time.time()
@@ -160,15 +149,18 @@ if (
 
     # contraste + OCR
     enh = ImageEnhance.Contrast(crop).enhance(1.2)
-    buf = io.BytesIO(); enh.save(buf, "JPEG"); buf.seek(0)
-    r = requests.post(
+    buf = io.BytesIO()
+    enh.save(buf, "JPEG")
+    buf.seek(0)
+
+    resp = requests.post(
         "https://api.ocr.space/parse/image",
-        files={"file":("img.jpg", buf, "image/jpeg")},
-        data={"apikey":"K81047805588957","language":"eng","OCREngine":2}
+        files={"file": ("img.jpg", buf, "image/jpeg")},
+        data={"apikey": "K81047805588957", "language": "eng", "OCREngine": 2}
     )
 
-    if r.status_code == 200:
-        txt = r.json()["ParsedResults"][0]["ParsedText"]
+    if resp.status_code == 200:
+        txt = resp.json()["ParsedResults"][0]["ParsedText"]
         st.subheader("🔍 Texte brut")
         st.text(txt)
 
@@ -189,7 +181,7 @@ if (
             except Exception as e:
                 st.error(f"Erreur Sheets : {e}")
     else:
-        st.error(f"OCR.space error {r.status_code}")
+        st.error(f"OCR.space error {resp.status_code}")
 
     # bouton téléchargement
     dl = io.BytesIO()
@@ -198,7 +190,7 @@ if (
 
     st.session_state.crop_done = True
 
-elif c.json_data and st.session_state.prev_box:
+elif canvas_result.json_data and st.session_state.prev_box:
     elapsed = time.time() - st.session_state.last_move
     remaining = max(0, 3 - int(elapsed))
     st.info(f"Crop dans {remaining}s…")
