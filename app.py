@@ -9,26 +9,33 @@ st.title("📸 Rognage d'image avec compression & optimisation")
 # 📤 Téléversement
 uploaded_file = st.file_uploader("Téléverse une image (max 200 MB)", type=["jpg", "png", "jpeg"])
 if uploaded_file:
-    # 🧮 Limite strictement 200 MB en octets
     max_size_bytes = 200 * 1024 * 1024  # 200 MB
     quality = 90
-    # 📥 Ouverture image
-    img = Image.open(uploaded_file).convert("RGB")
-    img = img.rotate(-90, expand=True)
-    w, h = img.size
+
+    # 🧩 Image originale
+    original_img = Image.open(uploaded_file).convert("RGB")
+    original_img = original_img.rotate(-90, expand=True)
+
+    # 🧮 Crop pour version réduite
+    w, h = original_img.size
     left = int(w * 0.05)
     right = int(w * 0.85)
     top = int(h * 0.3)
     bottom = int(h * 0.7)
-    img = img.crop((left, top, right, bottom))
+    img = original_img.crop((left, top, right, bottom))
+
+    # 🖼️ Affichage image réduite
     st.image(img, caption="🖼️ Image affichée avec rotation", use_container_width=True)
 
-    # 🟦 Canvas avec mode rectangle
+    # 📏 Taille canvas choisie
+    canvas_width = 300
+    canvas_height = int(canvas_width * img.height / img.width)  # conserve ratio
+
     st.subheader("🟦 Dessine un cadre de sélection")
     canvas_result = st_canvas(
         background_image=img,
-        height=300,
-        width=300,
+        height=canvas_height,
+        width=canvas_width,
         drawing_mode="rect",
         stroke_width=2,
         stroke_color="blue",
@@ -36,17 +43,29 @@ if uploaded_file:
         key="canvas_crop"
     )
 
-    # ✂️ Rognage si sélection existante
     if canvas_result.json_data and canvas_result.json_data["objects"]:
         obj = canvas_result.json_data["objects"][0]
-        x, y = int(obj["left"]), int(obj["top"])
-        w, h = int(obj["width"]), int(obj["height"])
-        cropped = img.crop((x, y, x + w, y + h)).convert("RGB")
+        # 🎯 Mise à l’échelle
+        scale_x = img.width / canvas_width
+        scale_y = img.height / canvas_height
+
+        # 🧮 Coordonnées dans l'image affichée
+        x = int(obj["left"] * scale_x)
+        y = int(obj["top"] * scale_y)
+        w_sel = int(obj["width"] * scale_x)
+        h_sel = int(obj["height"] * scale_y)
+
+        # 🔁 Ajuster pour image d'origine
+        crop_left = left + x
+        crop_top = top + y
+        crop_right = crop_left + w_sel
+        crop_bottom = crop_top + h_sel
+
+        cropped = original_img.crop((crop_left, crop_top, crop_right, crop_bottom)).convert("RGB")
 
         st.subheader("🔍 Résultat rogné")
         st.image(cropped, caption="📐 Image rognée et compressée")
 
-        # 📥 Téléchargement final
         final_buffer = io.BytesIO()
         cropped.save(final_buffer, format="JPEG", quality=quality, optimize=True)
         st.download_button(
