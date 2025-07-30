@@ -9,7 +9,7 @@ from google.oauth2.service_account import Credentials
 
 # 🆔 Récupération de l'ID_Panneau depuis l'URL
 st.write("🔍 ID brut récupéré :", st.query_params)
-id_panneau = str(st.query_params.get("id_panneau", [""])[0])
+id_panneau = str(st.query_params.get("id_panneau", [""])
 st.info(f"🆔 ID détecté : `{id_panneau}`")
 TARGET_KEYS = ["Voc", "Isc", "Pmax", "Vpm", "Ipm"]
 
